@@ -8,3 +8,6 @@ wheels/
 
 # Virtual environments
 .venv
+
+# For the use of AI agents
+reference/
