@@ -9,5 +9,8 @@ wheels/
 # Virtual environments
 .venv
 
+# Built Bible databases
+*.db
+
 # For the use of AI agents
 reference/

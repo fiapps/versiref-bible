@@ -1,9 +1,39 @@
 [project]
 name = "versiref-bible"
 version = "0.1.0"
-description = "Access Bibles using versirefq"
+description = "Access Bibles using versiref"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
     "versiref>=0.5.1",
+    "click>=8.1.0",
+]
+
+[project.scripts]
+versiref-bible = "versiref.bible.cli:main"
+
+[build-system]
+requires = ["uv_build>=0.9.28,<0.10.0"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "versiref.bible"
+
+[tool.mypy]
+mypy_path = "src"
+namespace_packages = true
+explicit_package_bases = true
+
+[tool.ruff.lint]
+select = ["D"]
+ignore = ["D203", "D213"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["D101", "D102", "D103"]
+
+[dependency-groups]
+dev = [
+    "mypy>=1.19.1",
+    "pytest>=9.0.2",
+    "ruff>=0.15.1",
 ]
