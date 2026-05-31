@@ -10,6 +10,11 @@ references and handles versification.
 The command-line interface is designed for use by an LLM: output is compact plain text, one
 verse per line as `reference⇥text` (TAB-separated).
 
+## Documentation
+
+- [Building Databases](docs/building.md) — the `build` command (producers).
+- [Querying Databases](docs/querying.md) — the `show`, `search`, and `info` commands (consumers).
+
 ## Installation
 
 ```sh
