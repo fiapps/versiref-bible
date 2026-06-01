@@ -115,6 +115,9 @@ versiref-bible search kjv.db "light" --in "Gen 1"
 versiref-bible search kjv.db "faith" --in "Romans"
 ```
 
+Since `versiref` does not parse cross-book ranges, you have to list the individual books: not
+`--in "Matt–John"`, but `--in "Matt; Mark; Luke; John"`.
+
 ## Database Info
 
 `info` shows a database's metadata and verse count:
