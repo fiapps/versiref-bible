@@ -67,7 +67,7 @@ Each Bible is a single SQLite database (`database.py`) with three tables:
    - `content='verses'`, `content_rowid='verse_key'`.
    - Built once after a bulk insert with `INSERT INTO verses_fts(verses_fts) VALUES('rebuild')` — there are no sync triggers because a build is one-shot.
 
-3. **metadata**: key-value pairs (`title`, `versification`, `book_style`, `source`, `verse_count`, `built_at`, `schema_version`).
+3. **metadata**: key-value pairs (`title`, `versification`, `source`, `verse_count`, `built_at`, `schema_version`).
 
 ### Verse Encoding
 

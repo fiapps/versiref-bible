@@ -116,7 +116,6 @@ versiref-bible build [OPTIONS] INPUT_FILE
 | --- | ----------- |
 | `schema_version` | Database schema version |
 | `versification` | The versification the verse keys were computed against |
-| `book_style` | The book-name style used to read the input |
 | `source` | The input file name |
 | `verse_count` | Number of verses stored |
 | `built_at` | Local timestamp of the build |

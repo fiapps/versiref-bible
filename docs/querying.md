@@ -106,7 +106,6 @@ versiref-bible info kjv.db
 ```
 
 ```text
-book_style: en-bibleworks
 built_at: 2026-05-31T19:02:18
 schema_version: 1.0
 source: kjv.cat

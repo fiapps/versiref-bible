@@ -106,7 +106,6 @@ def build_database(
         db.rebuild_fts()
         db.set_metadata("schema_version", SCHEMA_VERSION)
         db.set_metadata("versification", versification)
-        db.set_metadata("book_style", book_style)
         db.set_metadata("source", input_path.name)
         db.set_metadata("verse_count", str(stats.stored))
         db.set_metadata("built_at", datetime.datetime.now().isoformat(timespec="seconds"))
