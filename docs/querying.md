@@ -65,7 +65,8 @@ Septuagint database that has no New Testament), `show` prints `No verses found.`
 
 ## Searching Verse Text
 
-`search` runs a full-text query over verse text, ranked by relevance (best matches first):
+`search` runs a full-text query over verse text. By default results come back in **canonical
+verse order**:
 
 ```sh
 versiref-bible search kjv.db "light" --limit 5
@@ -86,6 +87,23 @@ written to stderr:
 ```text
 … showing 5 of 209 matches (raise --limit to see more)
 ```
+
+### Ordering
+
+`--order` selects how results are sorted:
+
+- `canonical` (default) — verse-key order, i.e. the order the verses appear in the Bible.
+  Predictable and easy to navigate, and the right choice for common words.
+- `relevance` — SQLite FTS5 bm25 ranking, best matches first, ties broken by canonical order.
+
+```sh
+versiref-bible search kjv.db "living water" --order relevance
+```
+
+bm25 normalizes by verse length, so under `relevance` a single-word query tends to surface the
+**shortest** matching verses first (the hit is a larger fraction of the text); rarer words and
+repeated occurrences also score higher. It earns its keep on phrase and multi-word queries; for
+a single common word, `canonical` is usually more useful.
 
 ### Restricting the Search
 
@@ -140,6 +158,7 @@ versiref-bible search [OPTIONS] DATABASE QUERY
 | ------ | ----------- |
 | `-n`, `--limit` | Maximum number of verses to return (default: 20) |
 | `--in` | Restrict the search to a reference (e.g. `"Gen 1"`, `"John"`) |
+| `--order` | Result order: `canonical` (default) or `relevance` (bm25) |
 | `--style` | Reference style for labelling output and parsing `--in` (default: `en-sbl`) |
 
 ### `info` Command

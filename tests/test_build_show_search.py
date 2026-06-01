@@ -82,3 +82,21 @@ def test_search_limit(bible_db: Path) -> None:
     verses, total, _ = search_verses(bible_db, "the", limit=2)
     assert len(verses) <= 2
     assert total >= len(verses)
+
+
+def test_search_canonical_order_is_default(bible_db: Path) -> None:
+    # "God" appears in Genesis and John; default order is by verse key.
+    verses, _, _ = search_verses(bible_db, "God")
+    keys = [v.key for v in verses]
+    assert keys == sorted(keys)
+    assert verses[0].book_id == "GEN"
+
+
+def test_search_relevance_order(bible_db: Path) -> None:
+    verses, _, _ = search_verses(bible_db, "God", order="relevance")
+    assert {v.book_id for v in verses} == {"GEN", "JHN"}
+
+
+def test_search_invalid_order_rejected(bible_db: Path) -> None:
+    with pytest.raises(ValueError):
+        search_verses(bible_db, "God", order="bogus")

@@ -174,6 +174,13 @@ def show(
     help='Restrict the search to a reference (e.g. "Gen 1", "John").',
 )
 @click.option(
+    "--order",
+    type=click.Choice(["canonical", "relevance"]),
+    default="canonical",
+    show_default=True,
+    help="Result order: canonical (verse order) or relevance (bm25 rank).",
+)
+@click.option(
     "--style",
     default="en-sbl",
     show_default=True,
@@ -184,16 +191,18 @@ def search(
     query: str,
     limit: int,
     scope: str | None,
+    order: str,
     style: str,
 ) -> None:
-    """Full-text search verse text with FTS5 QUERY, ranked by relevance.
+    """Full-text search verse text with FTS5 QUERY.
 
     QUERY uses SQLite FTS5 syntax (e.g. ``light``, ``"living water"``,
-    ``love AND world``). Output is ``reference<TAB>text``, best matches first.
+    ``love AND world``). Output is ``reference<TAB>text``, in canonical verse
+    order by default (use ``--order relevance`` for bm25 ranking).
     """
     try:
         verses, total, db_vers = search_verses(
-            database, query, limit=limit, scope=scope, style_name=style
+            database, query, limit=limit, scope=scope, order=order, style_name=style
         )
         if not verses:
             click.echo("No matching verses.", err=True)

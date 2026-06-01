@@ -166,19 +166,24 @@ class Database:
         query: str,
         limit: int,
         ranges: Sequence[tuple[int, int]] | None = None,
+        order: str = "canonical",
     ) -> list[Verse]:
-        """Full-text search verse text, ranked by relevance.
+        """Full-text search verse text.
 
         Args:
             query: FTS5 MATCH query.
             limit: Maximum number of verses to return.
             ranges: Optional key ranges to restrict the search to.
+            order: ``"canonical"`` for verse-key (Bible) order, or
+                ``"relevance"`` for FTS5 bm25 rank (best first), tie-broken by
+                verse key.
 
         Returns:
-            Matching verses ordered by FTS5 ``rank`` (best first), capped at
-            ``limit``.
+            Matching verses in the requested order, capped at ``limit``.
 
         """
+        if order not in ("canonical", "relevance"):
+            raise ValueError(f"Invalid order {order!r}: use 'canonical' or 'relevance'.")
         conn = self._require_conn()
         sql = [
             "SELECT v.verse_key, v.book_id, v.chapter, v.verse, v.text",
@@ -190,7 +195,11 @@ class Database:
             clause, range_params = _range_clause(ranges)
             sql.append(f"AND {clause}")
             params.extend(range_params)
-        sql.append("ORDER BY f.rank LIMIT ?")
+        if order == "relevance":
+            sql.append("ORDER BY f.rank, v.verse_key")
+        else:
+            sql.append("ORDER BY v.verse_key")
+        sql.append("LIMIT ?")
         params.append(limit)
         cursor = conn.execute("\n".join(sql), params)
         return [_row_to_verse(row) for row in cursor.fetchall()]

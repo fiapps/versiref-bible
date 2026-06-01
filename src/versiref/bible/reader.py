@@ -83,9 +83,10 @@ def search_verses(
     *,
     limit: int = 20,
     scope: str | None = None,
+    order: str = "canonical",
     style_name: str = "en-sbl",
 ) -> tuple[list[Verse], int, Versification]:
-    """Full-text search verse text, ranked by relevance.
+    """Full-text search verse text.
 
     Args:
         db_path: Path to the Bible database.
@@ -93,6 +94,8 @@ def search_verses(
         limit: Maximum number of verses to return.
         scope: Optional Bible reference restricting the search (parsed in the
             database's versification).
+        order: ``"canonical"`` for verse (Bible) order, or ``"relevance"`` for
+            bm25 rank (best first, tie-broken by verse order).
         style_name: Reference style used to parse ``scope`` and to label output.
 
     Returns:
@@ -113,7 +116,7 @@ def search_verses(
                 raise ValueError(f"Could not parse scope reference: {scope!r}")
             ranges = list(scope_ref.range_keys())
         try:
-            results = db.search(query, limit, ranges)
+            results = db.search(query, limit, ranges, order)
             total = db.count_matches(query, ranges)
         except sqlite3.OperationalError as exc:
             raise ValueError(f"Invalid search query {query!r}: {exc}") from exc
