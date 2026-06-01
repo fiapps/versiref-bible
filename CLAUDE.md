@@ -33,6 +33,24 @@ uv run mypy src      # type checking
 uv run ruff check    # linting (ruff pydocstyle rules are enabled)
 ```
 
+### Dependency auditing
+
+Supply-chain checks run when upgrading dependencies and before tagging a release.
+See `SECURITY.md` for the threat model and the full procedure; the key commands are:
+
+```sh
+# Upgrade third-party deps with a 7-day cooldown (BSD/macOS date)
+uv lock --upgrade --exclude-newer "$(date -u -v-7d +%Y-%m-%dT%H:%M:%SZ)"
+
+# First-party exception: pick up any newer versiref release
+uv lock --upgrade-package versiref
+
+# Scan the locked tree for known advisories
+uv export --format requirements-txt --no-emit-project | uvx pip-audit -r /dev/stdin --disable-pip --require-hashes
+```
+
+A CVE on a current dependency overrides the cooldown — upgrade immediately.
+
 ## Architecture
 
 ### Core Data Model
@@ -127,6 +145,19 @@ Key configuration:
 - Build backend: `uv_build>=0.9.28,<0.10.0`
 - Module name: `versiref.bible`
 
+## Releasing
+
+To prepare a release:
+
+1. Bump the version in `pyproject.toml` (the sole source of the version number).
+2. Move the `[Unreleased]` entries in `CHANGELOG.md` under the new version heading, following the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format.
+3. Run `uv lock` to update the lock file.
+4. Run `pip-audit` (see "Dependency auditing") and verify no unfixed advisories apply.
+5. Run tests, type checking, and linting to verify everything passes.
+
+Git tags use bare version numbers (e.g. `0.1.0`, not `v0.1.0`).
+Building, publishing, and tagging are done manually after the release commit.
+
 ## Markdown Style
 
 When writing or editing Markdown (docs, README, this file):
@@ -140,3 +171,5 @@ When writing or editing Markdown (docs, README, this file):
 - `pyproject.toml`: package configuration and dependencies; sole source of the version number.
 - `src/versiref/bible/__init__.py`: public API exports.
 - `uv.lock`: lock file for reproducible dependency resolution.
+- `SECURITY.md`: disclosure process and supply-chain defenses.
+- `CHANGELOG.md`: notable changes per version (Keep a Changelog format).

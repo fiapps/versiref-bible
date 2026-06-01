@@ -3,6 +3,9 @@ name = "versiref-bible"
 version = "0.1.0"
 description = "Access Bibles using versiref"
 readme = "README.md"
+authors = [
+    { name = "Fr. John Lawrence M. Polis", email = "emptier-sank-dose@duck.com" }
+]
 requires-python = ">=3.10"
 dependencies = [
     "versiref>=0.5.1",
