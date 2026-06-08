@@ -6,7 +6,24 @@ readme = "README.md"
 authors = [
     { name = "Fr. John Lawrence M. Polis", email = "emptier-sank-dose@duck.com" }
 ]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Religion",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Religion",
+    "Topic :: Text Processing",
+]
 requires-python = ">=3.10"
+license = "MIT"
+license-files = ["LICEN[CS]E*"]
 dependencies = [
     "versiref>=0.5.1",
     "click>=8.1.0",
@@ -14,6 +31,10 @@ dependencies = [
 
 [project.scripts]
 versiref-bible = "versiref.bible.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/fiapps/versiref-bible"
+Issues = "https://github.com/fiapps/versiref-bible/issues"
 
 [build-system]
 requires = ["uv_build>=0.9.28,<0.10.0"]
