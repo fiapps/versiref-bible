@@ -44,7 +44,7 @@ Options:
 - `--title` — human-readable title stored in the database.
 - `--book-style` — reference style whose names map the file's abbreviations
   (default `en-bibleworks`).
-- `--encoding` — input text encoding (default `utf-8`; the CEI sample needs `cp1252`).
+- `--encoding` — input text encoding (e.g., `cp1252`; default `utf-8`).
 
 Lines whose book abbreviation is unrecognized (e.g. the Sirach prologue `Sip`), or whose book
 is absent from the chosen versification, are skipped with a warning on stderr.

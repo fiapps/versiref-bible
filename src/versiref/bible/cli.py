@@ -78,7 +78,7 @@ def _report_build(stats: BuildStats, output: Path) -> None:
     "--encoding",
     default="utf-8",
     show_default=True,
-    help="Text encoding of the input file (the CEI sample needs cp1252).",
+    help="Text encoding of the input file (e.g., cp1252).",
 )
 def build(
     input_file: Path,

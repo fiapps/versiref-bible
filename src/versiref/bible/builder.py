@@ -51,8 +51,8 @@ def build_database(
         title: Human-readable title stored in metadata.
         book_style: Named reference style whose recognized names map the
             file's book abbreviations (default ``en-bibleworks``).
-        encoding: Text encoding of the input file (default ``utf-8``;
-            the CEI sample needs ``cp1252``).
+        encoding: Text encoding of the input file (e.g., ``cp1252``;
+            default ``utf-8``).
 
     Returns:
         A :class:`BuildStats` summary of what was stored and skipped.
