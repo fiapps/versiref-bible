@@ -8,11 +8,8 @@ If you only need to query an existing database, see [querying.md](querying.md).
 Build a Bible into a searchable database:
 
 ```sh
-versiref-bible build kjv.cat --versification eng --title "King James Version"
+versiref-bible build kjv.cat -o kjv.db --versification eng --title "King James Version"
 ```
-
-The output database defaults to the input name with a `.db` suffix (here, `kjv.db`); pass
-`-o`/`--output` to choose another path.
 
 A build prints a one-line summary, e.g.:
 
@@ -82,7 +79,7 @@ Example warnings (stderr):
 file is UTF-8; the sample CEI 2008 text, for instance, is `cp1252`:
 
 ```sh
-versiref-bible build cei_2008.cat --versification cei --encoding cp1252 --title "CEI 2008"
+versiref-bible build cei_2008.cat -o cei_2008.db --versification cei --encoding cp1252 --title "CEI 2008"
 ```
 
 ## Book-Name Style
@@ -103,7 +100,7 @@ versiref-bible build [OPTIONS] INPUT_FILE
 | Option | Description |
 | ------ | ----------- |
 | `-v`, `--versification` | Named versification of the Bible (required, e.g. `eng`, `lxx`, `cei`) |
-| `-o`, `--output` | Output database path (default: input name with a `.db` suffix) |
+| `-o`, `--output` | Output database path (required) |
 | `--title` | Human-readable title stored in the database metadata |
 | `--book-style` | Reference style whose names map the file's abbreviations (default: `en-bibleworks`) |
 | `--encoding` | Text encoding of the input file (default: `utf-8`) |

@@ -58,8 +58,8 @@ def _report_build(stats: BuildStats, output: Path) -> None:
     "--output",
     "output_file",
     type=click.Path(dir_okay=False, path_type=Path),
-    default=None,
-    help="Output database path [default: INPUT with a .db suffix]",
+    required=True,
+    help="Output database path.",
 )
 @click.option(
     "-v",
@@ -82,7 +82,7 @@ def _report_build(stats: BuildStats, output: Path) -> None:
 )
 def build(
     input_file: Path,
-    output_file: Path | None,
+    output_file: Path,
     versification: str,
     title: str | None,
     book_style: str,
@@ -94,7 +94,7 @@ def build(
     abbreviation is unrecognized, or whose book is not in the chosen
     versification, are skipped with a warning.
     """
-    output = output_file or input_file.with_suffix(".db")
+    output = output_file
     try:
         stats = build_database(
             input_file,

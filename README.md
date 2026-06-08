@@ -34,13 +34,13 @@ keyed by an integer verse key computed under the chosen versification, plus an F
 the verse text. CCAT footnotes/formatting are kept as plain text for now.
 
 ```sh
-uv run versiref-bible build BIBLE.cat --versification eng --title "My Bible"
+uv run versiref-bible build BIBLE.cat -o BIBLE.db --versification eng --title "My Bible"
 ```
 
 Options:
 
 - `-v, --versification` (required) — named versification of the Bible (`eng`, `lxx`, `cei`, …).
-- `-o, --output` — database path (default: input name with a `.db` suffix).
+- `-o, --output` (required) — output database path.
 - `--title` — human-readable title stored in the database.
 - `--book-style` — reference style whose names map the file's abbreviations
   (default `en-bibleworks`).
