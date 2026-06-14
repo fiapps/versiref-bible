@@ -102,13 +102,24 @@ This is deliberate: `is_valid` also rejects a verse whose number exceeds the bun
 
 A future versiref `BibleRef`-overlap/inclusion feature could let off-scheme verses be stored and shown instead of skipped; the build gate is the single place to revisit if that lands.
 
+### Bible Resolution (`resolver.py`)
+
+`show`, `search`, and `info` accept their database argument as either a path or a bare name, resolved by `resolve_bible`:
+
+1. An existing file path is used as-is (back-compatible; `kjv.db`, `./bibles/kjv.db`, absolute paths all work).
+2. A path-like spec (contains a separator) that does not exist is an error — names are not searched for it.
+3. A bare name resolves to `<name>.db` across the directories of `bible_search_path()`, first match winning.
+
+`bible_search_path()` reads `VERSIREF_BIBLE_PATH` (`os.pathsep`-separated, like `PATH`); when unset it is the single `default_data_dir()` (per-platform user data dir). There is no separate repo-local search — point `VERSIREF_BIBLE_PATH` at the repo to get that. `default_data_dir` is hand-rolled (no `platformdirs` dependency) to keep the dependency surface at `versiref` + `click`.
+
 ### Source Modules (`src/versiref/bible/`)
 
 - `models.py`: `Verse` and `BuildStats` data classes.
 - `database.py`: schema and the `Database` wrapper (insert, rebuild FTS, range and FTS queries, counts).
 - `builder.py`: `build_database` — parse the `.cat` file, map abbreviations, compute keys, skip-and-tally, write the DB.
 - `reader.py`: `show_verses`, `search_verses`, and the `format_verse` plain-text formatter.
-- `cli.py`: Click CLI with the `build`, `show`, `search`, and `info` commands.
+- `resolver.py`: resolve a Bible name or path to a `.db` file via `VERSIREF_BIBLE_PATH` (or the per-user `default_data_dir`); `resolve_bible`, `list_bibles`, `bible_search_path`, `BibleNotFoundError`.
+- `cli.py`: Click CLI with the `build`, `show`, `search`, `info`, and `list` commands. `show`/`search`/`info` accept a Bible name (resolved via `resolver.py`) or a path.
 - `__init__.py`: public API exports.
 
 Tests in `tests/` build a small in-memory fixture Bible and exercise build/show/search end to end.

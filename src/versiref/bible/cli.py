@@ -1,5 +1,7 @@
 """Command-line interface for versiref-bible."""
 
+import os
+import sqlite3
 import sys
 from pathlib import Path
 
@@ -10,6 +12,12 @@ from .builder import build_database
 from .database import Database
 from .models import BuildStats
 from .reader import format_verse, search_verses, show_verses
+from .resolver import (
+    ENV_VAR,
+    bible_search_path,
+    list_bibles,
+    resolve_bible,
+)
 
 
 @click.group()
@@ -111,9 +119,7 @@ def build(
 
 
 @main.command()
-@click.argument(
-    "database", type=click.Path(exists=True, dir_okay=False, path_type=Path)
-)
+@click.argument("database")
 @click.argument("reference")
 @click.option(
     "--style",
@@ -127,18 +133,20 @@ def build(
     help="Interpret REFERENCE in this versification and map it to the database's.",
 )
 def show(
-    database: Path,
+    database: str,
     reference: str,
     style: str,
     from_versification: str | None,
 ) -> None:
     """Print the verses covered by a Bible REFERENCE, one per line.
 
-    Each line is ``reference<TAB>text``.
+    DATABASE is a Bible name on the search path (see ``list``) or a path to a
+    ``.db`` file. Each line is ``reference<TAB>text``.
     """
     try:
+        db_path = resolve_bible(database)
         verses, db_vers = show_verses(
-            database,
+            db_path,
             reference,
             style_name=style,
             from_versification=from_versification,
@@ -155,9 +163,7 @@ def show(
 
 
 @main.command()
-@click.argument(
-    "database", type=click.Path(exists=True, dir_okay=False, path_type=Path)
-)
+@click.argument("database")
 @click.argument("query")
 @click.option(
     "-n",
@@ -187,7 +193,7 @@ def show(
     help="Reference style for labelling output and parsing --in.",
 )
 def search(
-    database: Path,
+    database: str,
     query: str,
     limit: int,
     scope: str | None,
@@ -196,13 +202,15 @@ def search(
 ) -> None:
     """Full-text search verse text with FTS5 QUERY.
 
-    QUERY uses SQLite FTS5 syntax (e.g. ``light``, ``"living water"``,
-    ``love AND world``). Output is ``reference<TAB>text``, in canonical verse
-    order by default (use ``--order relevance`` for bm25 ranking).
+    DATABASE is a Bible name on the search path (see ``list``) or a path to a
+    ``.db`` file. QUERY uses SQLite FTS5 syntax (e.g. ``light``,
+    ``"living water"``, ``love AND world``). Output is ``reference<TAB>text``, in
+    canonical verse order by default (use ``--order relevance`` for bm25 ranking).
     """
     try:
+        db_path = resolve_bible(database)
         verses, total, db_vers = search_verses(
-            database, query, limit=limit, scope=scope, order=order, style_name=style
+            db_path, query, limit=limit, scope=scope, order=order, style_name=style
         )
         if not verses:
             click.echo("No matching verses.", err=True)
@@ -222,13 +230,16 @@ def search(
 
 
 @main.command()
-@click.argument(
-    "database", type=click.Path(exists=True, dir_okay=False, path_type=Path)
-)
-def info(database: Path) -> None:
-    """Show metadata and verse count for a Bible database."""
+@click.argument("database")
+def info(database: str) -> None:
+    """Show metadata and verse count for a Bible database.
+
+    DATABASE is a Bible name on the search path (see ``list``) or a path to a
+    ``.db`` file.
+    """
     try:
-        with Database(database) as db:
+        db_path = resolve_bible(database)
+        with Database(db_path) as db:
             metadata = db.get_all_metadata()
             count = db.count_verses()
         for key, value in metadata.items():
@@ -237,6 +248,38 @@ def info(database: Path) -> None:
     except (ValueError, OSError) as exc:
         click.echo(f"Error: {exc}", err=True)
         sys.exit(1)
+
+
+@main.command(name="list")
+def list_command() -> None:
+    """List the Bible databases found on the search path.
+
+    Each line is ``name<TAB>versification<TAB>verses<TAB>title``; the name is
+    what ``show``, ``search``, and ``info`` accept in place of a path. The search
+    path comes from the VERSIREF_BIBLE_PATH environment variable
+    (os.pathsep-separated); when unset it is a single per-user data directory.
+    """
+    path = bible_search_path()
+    databases = list_bibles()
+    if not databases:
+        searched = os.pathsep.join(str(d) for d in path)
+        click.echo(f"No Bible databases found on the search path ({searched}).", err=True)
+        click.echo(
+            f"Set {ENV_VAR} or place .db files in one of those directories.", err=True
+        )
+        return
+    for db_file in databases:
+        versification = ""
+        title = ""
+        count = ""
+        try:
+            with Database(db_file) as db:
+                versification = db.get_metadata("versification") or ""
+                title = db.get_metadata("title") or ""
+                count = str(db.count_verses())
+        except (sqlite3.Error, OSError):
+            title = "(unreadable)"
+        click.echo(f"{db_file.stem}\t{versification}\t{count}\t{title}")
 
 
 if __name__ == "__main__":

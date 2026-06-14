@@ -49,10 +49,17 @@ Options:
 Lines whose book abbreviation is unrecognized (e.g. the Sirach prologue `Sip`), or whose book
 is absent from the chosen versification, are skipped with a warning on stderr.
 
+The `show`, `search`, and `info` commands take a database either as a path to a `.db` file or
+as a bare **name** looked up on a search path. The search path comes from `VERSIREF_BIBLE_PATH`
+(`os.pathsep`-separated, like `PATH`); when unset, a per-user data directory is searched (e.g.
+`~/Library/Application Support/versiref-bible` on macOS, `~/.local/share/versiref-bible` on
+Linux). Drop your `.db` files there and refer to them by name from any directory. See
+[Querying Databases](docs/querying.md#naming-a-database) for details.
+
 ### `show` — print the verses of a reference
 
 ```sh
-uv run versiref-bible show BIBLE.db "John 3:16-18"
+uv run versiref-bible show kjv "John 3:16-18"     # by name, or a path: kjv.db
 ```
 
 - `--style` — reference style for parsing the input and labelling output (default `en-sbl`).
@@ -83,6 +90,16 @@ uv run versiref-bible info BIBLE.db
 ```
 
 Prints the stored metadata (title, versification, source, build time, …) and the verse count.
+
+### `list` — list available Bibles
+
+```sh
+uv run versiref-bible list
+```
+
+Lists the databases found on the search path, one per line as
+`name⇥versification⇥verses⇥title`. The first column is the name you can pass to `show`,
+`search`, and `info`.
 
 ## Development
 

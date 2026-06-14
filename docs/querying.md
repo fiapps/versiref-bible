@@ -19,6 +19,39 @@ Each line is `reference⇥text` — a formatted reference label, a TAB, then the
 CCAT verse text is single-line, so the tab keeps each line unambiguous and easy to split. The
 format is the same for `show` and `search`.
 
+## Naming a Database
+
+`show`, `search`, and `info` take a database as their first argument. You can give either:
+
+- a **path** to a `.db` file (`kjv.db`, `./bibles/kjv.db`, an absolute path), or
+- a bare **name** (`kjv`) that is looked up on a search path.
+
+A name is resolved to `<name>.db` by searching, in order, the directories named by the
+`VERSIREF_BIBLE_PATH` environment variable (separated by `:` on macOS/Linux, `;` on Windows,
+like `PATH`). The first match wins. When `VERSIREF_BIBLE_PATH` is unset, a single per-user data
+directory is searched:
+
+- macOS: `~/Library/Application Support/versiref-bible`
+- Linux: `$XDG_DATA_HOME/versiref-bible` (default `~/.local/share/versiref-bible`)
+- Windows: `%LOCALAPPDATA%\versiref-bible`
+
+So you can drop your `.db` files in that directory and refer to them by name from any working
+directory:
+
+```sh
+versiref-bible show kjv "John 3:16"
+versiref-bible search nvul "in the beginning was the word"
+```
+
+To keep a per-repo collection, point `VERSIREF_BIBLE_PATH` at the repo's directory (and, if you
+want the per-user directory searched too, append it):
+
+```sh
+export VERSIREF_BIBLE_PATH="$PWD/bibles:$HOME/.local/share/versiref-bible"
+```
+
+Use `list` (below) to see which names are available.
+
 ## Showing Verses by Reference
 
 `show` prints the verses a reference covers:
@@ -138,7 +171,30 @@ verses: 31102
 
 Use this to discover a database's title and versification before querying it.
 
+## Listing Available Bibles
+
+`list` prints the databases found on the search path (see
+[Naming a Database](#naming-a-database)), one per line as
+`name⇥versification⇥verses⇥title`:
+
+```sh
+versiref-bible list
+```
+
+```text
+kjv	eng	31102	King James Version
+nvul	vul	35817	Nova Vulgata
+brenton	lxx	28145	Brenton Septuagint
+```
+
+The first column is the name you pass to `show`, `search`, and `info`. If no databases are
+found, `list` prints the directories it searched on stderr and how to set
+`VERSIREF_BIBLE_PATH`.
+
 ## Options Reference
+
+In every command below, `DATABASE` is a Bible name on the search path or a path to a `.db`
+file (see [Naming a Database](#naming-a-database)).
 
 ### `show` Command
 
@@ -170,7 +226,16 @@ versiref-bible search [OPTIONS] DATABASE QUERY
 versiref-bible info DATABASE
 ```
 
-Takes a single database path. No additional options.
+Takes a single database (name or path). No additional options.
+
+### `list` Command
+
+```text
+versiref-bible list
+```
+
+Takes no arguments. Lists the databases on the search path as
+`name⇥versification⇥verses⇥title`; reads `VERSIREF_BIBLE_PATH` for the directories to search.
 
 ## Python API
 
