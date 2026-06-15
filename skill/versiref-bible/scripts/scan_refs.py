@@ -19,8 +19,14 @@ so point it at the same config/metadata you already use:
 
 Each invalid reference is printed as a single tab-separated record::
 
-    chapter1.md:142:18	Phil 5:1	no such chapter (PHP has 4 chapters)
+    chapter1.md:142:18	Phil 5:1	no such chapter (Phil has 4 chapters)
         | As Paul writes in Phil 5:1, and again in ...
+
+A reference is invalid if *any* of its verse ranges is; when it has more than
+one range, the reason names each offending range so the bad part stands out::
+
+    psalter.md:7:5	Ps 1:1; 2:12; 119:1	Ps 2:12: no such verse (Ps 2 has 11 verses)
+        | See Ps 1:1; 2:12; 119:1 for the theme.
 
 Validity is structural only — a reference that names a chapter or verse outside
 the versification, or a book outside its canon. A reference that is structurally
@@ -46,10 +52,26 @@ class ConfigError(Exception):
     """A style/versification could not be resolved from the inputs."""
 
 
+def _front_matter(text: str) -> str:
+    """Return the YAML front-matter block if ``text`` opens with one.
+
+    A Markdown file may carry its settings in a ``---``-delimited front-matter
+    block followed by prose; bare YAML has no such delimiters. If the text
+    starts with a ``---`` line, return only the block up to the closing ``---``
+    (or ``...``); otherwise return the text unchanged so plain YAML still loads.
+    """
+    lines = text.splitlines(keepends=True)
+    if lines and lines[0].strip() == "---":
+        for i in range(1, len(lines)):
+            if lines[i].strip() in ("---", "..."):
+                return "".join(lines[1:i])
+    return text
+
+
 def _load_yaml(path: Path) -> dict:
-    """Load a YAML mapping, tolerating front-matter delimiters."""
+    """Load a YAML mapping from a bare-YAML or Markdown-front-matter file."""
     text = path.read_text(encoding="utf-8")
-    data = yaml.safe_load(text)
+    data = yaml.safe_load(_front_matter(text))
     if not isinstance(data, dict):
         raise ConfigError(f"{path} does not contain a YAML mapping.")
     return data
@@ -126,18 +148,46 @@ def _start_key(sub_ref, versification: Versification) -> int | None:
 
 
 def invalid_reason(
-    versification: Versification, vers_name: str, book_id: str, chapter: int, verse: int
+    versification: Versification,
+    vers_name: str,
+    book_id: str,
+    book_label: str,
+    chapter: int,
+    verse: int,
 ) -> str:
-    """Explain why a (book, chapter, verse) is invalid under the versification."""
+    """Explain why a (book, chapter, verse) is invalid under the versification.
+
+    ``book_id`` is the Paratext code used to look up the versification;
+    ``book_label`` is the reader-facing name to show (the document's style,
+    e.g. ``Ps``), since the output is meant to be read by an LLM.
+    """
     if not versification.includes(book_id):
         return f"book not in versification '{vers_name}'"
     chapters = versification.max_verses.get(book_id, [])
     if chapter < 1 or chapter > len(chapters):
-        return f"no such chapter ({book_id} has {len(chapters)} chapters)"
+        return f"no such chapter ({book_label} has {len(chapters)} chapters)"
     max_verse = chapters[chapter - 1]
     if verse < 1 or verse > max_verse:
-        return f"no such verse ({book_id} {chapter} has {max_verse} verses)"
+        return f"no such verse ({book_label} {chapter} has {max_verse} verses)"
     return "out of range"
+
+
+def _sub_reason(
+    ref_style: RefStyle, versification: Versification, vers_name: str, sub
+) -> str | None:
+    """Explain why a single-book sub-ref is invalid, or None if it is valid."""
+    label = ref_style.names.get(sub.book_id, sub.book_id)
+    if not versification.includes(sub.book_id):
+        return invalid_reason(versification, vers_name, sub.book_id, label, 0, 0)
+    if sub.is_valid(versification):
+        return None
+    key = _start_key(sub, versification)
+    if key is None:
+        return "out of range"
+    chapter, verse = (key // 1000) % 1000, key % 1000
+    return invalid_reason(
+        versification, vers_name, sub.book_id, label, chapter, verse
+    )
 
 
 def _line_col(text: str, pos: int) -> tuple[int, int, str]:
@@ -153,6 +203,7 @@ def _line_col(text: str, pos: int) -> tuple[int, int, str]:
 def scan_text(
     text: str,
     parser: RefParser,
+    ref_style: RefStyle,
     versification: Versification,
     vers_name: str,
     sensitivity: Sensitivity,
@@ -160,28 +211,27 @@ def scan_text(
     """Find invalid references in ``text``.
 
     Returns ``(line, col, reference_text, reason, line_text)`` for each invalid
-    reference, in document order.
+    reference, in document order. A reference is invalid if *any* of its verse
+    ranges is invalid; when it has more than one range, the reason names each
+    offending range (e.g. ``Ps 2:12``) so the bad part is easy to spot.
     """
     findings: list[tuple[int, int, str, str, str]] = []
     for ref, start, end in parser.scan_string(text, sensitivity=sensitivity):
-        snippet = text[start:end]
-        for sub in ref.simple_refs:
-            if not versification.includes(sub.book_id):
-                reason = invalid_reason(versification, vers_name, sub.book_id, 0, 0)
-            elif sub.is_valid(versification):
+        ranges = list(ref.range_refs())
+        reasons: list[str] = []
+        for range_ref in ranges:
+            reason = _sub_reason(
+                ref_style, versification, vers_name, range_ref.simple_refs[0]
+            )
+            if reason is None:
                 continue
-            else:
-                key = _start_key(sub, versification)
-                if key is None:
-                    reason = "out of range"
-                else:
-                    chapter, verse = (key // 1000) % 1000, key % 1000
-                    reason = invalid_reason(
-                        versification, vers_name, sub.book_id, chapter, verse
-                    )
-            line_no, col, line_text = _line_col(text, start)
-            findings.append((line_no, col, snippet, reason, line_text))
-            break  # one record per scanned reference is enough
+            if len(ranges) > 1:
+                reason = f"{range_ref.format(ref_style)}: {reason}"
+            reasons.append(reason)
+        if not reasons:
+            continue
+        line_no, col, line_text = _line_col(text, start)
+        findings.append((line_no, col, text[start:end], "; ".join(reasons), line_text))
     return findings
 
 
@@ -221,7 +271,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"Error: {exc}", file=sys.stderr)
             return 2
         for line_no, col, snippet, reason, line_text in scan_text(
-            text, parser, versification, vers_name, sensitivity
+            text, parser, ref_style, versification, vers_name, sensitivity
         ):
             total += 1
             print(f"{path}:{line_no}:{col}\t{snippet}\t{reason}")
