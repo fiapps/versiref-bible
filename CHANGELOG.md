@@ -5,13 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## 0.1.1 - 2026-06-14
 
 ### Added
 
 - Bible name resolution: `show`, `search`, and `info` now accept a bare Bible name (e.g. `kjv`) in addition to a path to a `.db` file. A name is resolved to `<name>.db` by searching the directories on the `VERSIREF_BIBLE_PATH` environment variable (`os.pathsep`-separated, like `PATH`), the first match winning; when it is unset a single per-user data directory is searched (`~/Library/Application Support/versiref-bible` on macOS, `$XDG_DATA_HOME/versiref-bible` on Linux, `%LOCALAPPDATA%\versiref-bible` on Windows).
 - `list` subcommand: print the Bible databases found on the search path, one per line as `name<TAB>versification<TAB>verses<TAB>title`.
 - Public Python API: `resolve_bible`, `list_bibles`, `bible_search_path`, `default_data_dir`, and `BibleNotFoundError`.
+- A Claude Code skill under `skill/` (not part of the published package): bundles versiref-bible usage and an invalid-reference workflow, with `scan_refs.py` to scan Markdown for structurally invalid Bible references and report their source locations, reusing `versiref-search`'s style/versification config.
 
 ## 0.1.0
 

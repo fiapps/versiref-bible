@@ -1,6 +1,6 @@
 [project]
 name = "versiref-bible"
-version = "0.1.0"
+version = "0.1.1"
 description = "Access Bibles using versiref"
 readme = "README.md"
 authors = [
