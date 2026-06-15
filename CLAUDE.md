@@ -158,19 +158,22 @@ Key configuration:
 
 ## Releasing
 
-To prepare a release:
+When asked to make a release, Claude performs steps 1–7; publishing and pushing are done manually afterward (step 8).
 
 1. Bump the version in `pyproject.toml` (the sole source of the version number).
-2. Move the `[Unreleased]` entries in `CHANGELOG.md` under the new version heading, following the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format.
+2. Update `CHANGELOG.md` following the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format: rename the `## Unreleased` heading to the new version with the release date (`## X.Y.Z - YYYY-MM-DD`).
 3. Run `uv lock` to update the lock file.
 4. Run `pip-audit` (see "Dependency auditing") and verify no unfixed advisories apply.
 5. Run tests, type checking, and linting to verify everything passes.
-6. Commit with a changelog-style message: a short headline summarizing the release's changes (e.g. `Support a search path for Bible databases`), a blank line, then the new version's section from `CHANGELOG.md` (its `### Added`/`### Changed`/`### Removed` subsections and entries, without the version heading).
+6. Make the release commit (subject line `Release X.Y.Z`).
+7. Create an annotated tag named with the bare version number (e.g., `0.5.0`, not `v0.5.0`).
+   The tag annotation message is the new version's `CHANGELOG.md` section — its `### Added`/`### Changed`/`### Removed` subsection headings and their entries, but **without** the `## X.Y.Z` version heading line.
+   Tag with `git tag -a --cleanup=verbatim -F <file>`: the default cleanup strips lines beginning with `#`, which would silently drop the `###` subsection headings.
+   GitHub renders this annotation as the release notes on the releases page.
+8. Manual: publish and push the commit and tag.
 
-The release commit's body is the changelog so that, once the commit is tagged, GitHub's releases page shows the changelog for that release.
-
-Git tags use bare version numbers (e.g. `0.1.0`, not `v0.1.0`).
-Building, publishing, and tagging are done manually after the release commit.
+Claude may run `uv build` to produce the artifacts, but does not publish or push.
+Before building, delete any artifacts from previous versions in `dist/` (e.g. `rm -f dist/*`), so the directory holds only the current release's files and a publish step that uploads `dist/*` cannot pick up stale builds.
 
 ## Markdown Style
 
