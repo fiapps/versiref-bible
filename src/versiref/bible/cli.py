@@ -9,7 +9,7 @@ import click
 from versiref import RefStyle
 
 from .builder import build_database
-from .database import Database
+from .database import Database, IncompatibleDatabaseError
 from .models import BuildStats
 from .reader import format_verse, search_verses, show_verses
 from .resolver import (
@@ -157,7 +157,7 @@ def show(
         ref_style = RefStyle.named(style)
         for verse in verses:
             click.echo(format_verse(verse, ref_style, db_vers))
-    except (ValueError, LookupError) as exc:
+    except (ValueError, LookupError, IncompatibleDatabaseError) as exc:
         click.echo(f"Error: {exc}", err=True)
         sys.exit(1)
 
@@ -224,7 +224,7 @@ def search(
                 f"(raise --limit to see more)",
                 err=True,
             )
-    except (ValueError, LookupError) as exc:
+    except (ValueError, LookupError, IncompatibleDatabaseError) as exc:
         click.echo(f"Error: {exc}", err=True)
         sys.exit(1)
 
@@ -240,12 +240,13 @@ def info(database: str) -> None:
     try:
         db_path = resolve_bible(database)
         with Database(db_path) as db:
+            db.validate_schema()
             metadata = db.get_all_metadata()
             count = db.count_verses()
         for key, value in metadata.items():
             click.echo(f"{key}: {value}")
         click.echo(f"verses: {count}")
-    except (ValueError, OSError) as exc:
+    except (ValueError, OSError, IncompatibleDatabaseError) as exc:
         click.echo(f"Error: {exc}", err=True)
         sys.exit(1)
 

@@ -161,6 +161,7 @@ versiref-bible info kjv.db
 
 ```text
 built_at: 2026-05-31T19:02:18
+format: versiref-bible
 schema_version: 1.0
 source: kjv.cat
 title: King James Version
@@ -170,6 +171,12 @@ verses: 31102
 ```
 
 Use this to discover a database's title and versification before querying it.
+
+Every command that reads a database (`show`, `search`, `info`) first checks the `format` marker
+and `schema_version`.
+A file from another versiref tool (for example a `versiref-search` index), or a Bible built
+before this check existed, is rejected with a message telling you to rebuild it, rather than
+failing partway through a query.
 
 ## Listing Available Bibles
 

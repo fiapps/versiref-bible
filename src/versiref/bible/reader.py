@@ -55,6 +55,7 @@ def show_verses(
 
     """
     with Database(db_path) as db:
+        db.validate_schema()
         db_vers = _db_versification(db)
         source_vers = (
             Versification.named(from_versification)
@@ -107,6 +108,7 @@ def search_verses(
 
     """
     with Database(db_path) as db:
+        db.validate_schema()
         db_vers = _db_versification(db)
         ranges: list[tuple[int, int]] | None = None
         if scope is not None:

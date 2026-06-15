@@ -67,7 +67,7 @@ Each Bible is a single SQLite database (`database.py`) with three tables:
    - `content='verses'`, `content_rowid='verse_key'`.
    - Built once after a bulk insert with `INSERT INTO verses_fts(verses_fts) VALUES('rebuild')` — there are no sync triggers because a build is one-shot.
 
-3. **metadata**: key-value pairs (`title`, `versification`, `source`, `verse_count`, `built_at`, `schema_version`).
+3. **metadata**: key-value pairs (`format`, `title`, `versification`, `source`, `verse_count`, `built_at`, `schema_version`).
 
 ### Verse Encoding
 
@@ -112,10 +112,17 @@ A future versiref `BibleRef`-overlap/inclusion feature could let off-scheme vers
 
 `bible_search_path()` reads `VERSIREF_BIBLE_PATH` (`os.pathsep`-separated, like `PATH`); when unset it is the single `default_data_dir()` (per-platform user data dir). There is no separate repo-local search — point `VERSIREF_BIBLE_PATH` at the repo to get that. `default_data_dir` is hand-rolled (no `platformdirs` dependency) to keep the dependency surface at `versiref` + `click`.
 
+### Database Identity and Schema Check (`database.py`)
+
+A built Bible carries a `format` metadata marker (`PRODUCT_NAME = "versiref-bible"`) so it can be told apart from other versiref-ecosystem SQLite files (e.g. `versiref-search`) that share the `schema_version` key.
+`Database.validate_schema()` checks the marker first (a foreign or unmarked database is rejected cleanly with `IncompatibleDatabaseError` rather than failing later on a missing table), then applies an additive semver rule on `schema_version`: same major, and minor >= the code's required minor (`SCHEMA_VERSION`).
+Every read path calls it: `show_verses`, `search_verses` (`reader.py`), and `info` (`cli.py`).
+Databases built before the marker existed are unmarked and rejected with a "rebuild the Bible" message — mirroring `versiref-search`'s identical check (its commit `6c58477`).
+
 ### Source Modules (`src/versiref/bible/`)
 
 - `models.py`: `Verse` and `BuildStats` data classes.
-- `database.py`: schema and the `Database` wrapper (insert, rebuild FTS, range and FTS queries, counts).
+- `database.py`: schema and the `Database` wrapper (insert, rebuild FTS, range and FTS queries, counts); `validate_schema`, `PRODUCT_NAME`, `IncompatibleDatabaseError`.
 - `builder.py`: `build_database` — parse the `.cat` file, map abbreviations, compute keys, skip-and-tally, write the DB.
 - `reader.py`: `show_verses`, `search_verses`, and the `format_verse` plain-text formatter.
 - `resolver.py`: resolve a Bible name or path to a `.db` file via `VERSIREF_BIBLE_PATH` (or the per-user `default_data_dir`); `resolve_bible`, `list_bibles`, `bible_search_path`, `BibleNotFoundError`.

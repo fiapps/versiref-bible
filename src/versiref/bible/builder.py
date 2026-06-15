@@ -5,7 +5,7 @@ from pathlib import Path
 
 from versiref import RefStyle, SimpleBibleRef, Versification
 
-from .database import SCHEMA_VERSION, Database
+from .database import PRODUCT_NAME, SCHEMA_VERSION, Database
 from .models import BuildStats, Verse
 
 
@@ -104,6 +104,7 @@ def build_database(
         db.create_schema()
         db.insert_verses(verses.values())
         db.rebuild_fts()
+        db.set_metadata("format", PRODUCT_NAME)
         db.set_metadata("schema_version", SCHEMA_VERSION)
         db.set_metadata("versification", versification)
         db.set_metadata("source", input_path.name)

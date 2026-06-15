@@ -7,7 +7,37 @@ from typing import Any
 
 from .models import Verse
 
+# Identifies databases produced by this package, distinguishing them from
+# other versiref-ecosystem SQLite files (e.g. versiref-search) that share the
+# "schema_version" key. Written to the metadata "format" key at build time.
+PRODUCT_NAME = "versiref-bible"
+
+# Schema contract version (major.minor), independent of the package version.
+# Minor bumps are additive (new tables/columns); a major bump signals a
+# breaking change. Code requiring X.Y accepts any database whose major equals
+# X and whose minor is >= Y.
 SCHEMA_VERSION = "1.0"
+
+
+class IncompatibleDatabaseError(Exception):
+    """Raised when a database is not a compatible versiref-bible Bible."""
+
+
+def _parse_schema_version(value: str) -> tuple[int, int]:
+    """Parse a ``"major.minor"`` schema version into an ``(int, int)`` tuple.
+
+    Raises:
+        ValueError: If the value is not two dot-separated integers.
+
+    """
+    parts = value.split(".")
+    if len(parts) != 2:
+        raise ValueError("expected 'major.minor'")
+    try:
+        return int(parts[0]), int(parts[1])
+    except ValueError:
+        raise ValueError("major and minor must be integers")
+
 
 SCHEMA_SQL = """
 -- Key-value metadata (title, versification, source, etc.)
@@ -116,6 +146,52 @@ class Database:
         conn = self._require_conn()
         cursor = conn.execute("SELECT key, value FROM metadata ORDER BY key")
         return {row["key"]: row["value"] for row in cursor.fetchall()}
+
+    def validate_schema(self) -> None:
+        """Verify this database is a compatible versiref-bible Bible.
+
+        Checks the product identity marker first (so that another
+        versiref-ecosystem database is rejected cleanly rather than failing
+        later on a missing table), then the schema version using the additive
+        rule: the database's major version must equal this code's major
+        version, and its minor version must be >= this code's minor version
+        (:data:`SCHEMA_VERSION`).
+
+        Raises:
+            IncompatibleDatabaseError: If the database lacks the product marker
+                (legacy/unmarked — rebuild to fix), declares a different
+                product, or has an incompatible schema version.
+
+        """
+        product = self.get_metadata("format")
+        if product is None:
+            raise IncompatibleDatabaseError(
+                f"{self.db_path}: not a versiref-bible database "
+                "(missing 'format' marker); rebuild the Bible"
+            )
+        if product != PRODUCT_NAME:
+            raise IncompatibleDatabaseError(
+                f"{self.db_path}: database format is '{product}', not '{PRODUCT_NAME}'"
+            )
+
+        version = self.get_metadata("schema_version")
+        if version is None:
+            raise IncompatibleDatabaseError(
+                f"{self.db_path}: missing schema_version metadata"
+            )
+        try:
+            db_major, db_minor = _parse_schema_version(version)
+        except ValueError as exc:
+            raise IncompatibleDatabaseError(
+                f"{self.db_path}: unparseable schema_version '{version}': {exc}"
+            )
+
+        req_major, req_minor = _parse_schema_version(SCHEMA_VERSION)
+        if db_major != req_major or db_minor < req_minor:
+            raise IncompatibleDatabaseError(
+                f"{self.db_path}: schema version {version} is incompatible with "
+                f"this code (requires {SCHEMA_VERSION})"
+            )
 
     def insert_verses(self, verses: Iterable[Verse]) -> None:
         """Bulk-insert verses in a single transaction.

@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Every command that reads a database (`show`, `search`, and `info`) now verifies that the file is a versiref-bible Bible before using it. A database from another versiref tool (e.g. versiref-search), or one built before this check existed, is rejected up front with a clear message telling you to rebuild, instead of failing partway through. New Bibles carry a `format` metadata marker (`versiref-bible`) so they pass the check.
+- Public Python API: `IncompatibleDatabaseError`.
+
 ## 0.1.1 - 2026-06-14
 
 ### Added
