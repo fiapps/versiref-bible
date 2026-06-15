@@ -165,6 +165,9 @@ To prepare a release:
 3. Run `uv lock` to update the lock file.
 4. Run `pip-audit` (see "Dependency auditing") and verify no unfixed advisories apply.
 5. Run tests, type checking, and linting to verify everything passes.
+6. Commit with a changelog-style message: a short headline summarizing the release's changes (e.g. `Support a search path for Bible databases`), a blank line, then the new version's section from `CHANGELOG.md` (its `### Added`/`### Changed`/`### Removed` subsections and entries, without the version heading).
+
+The release commit's body is the changelog so that, once the commit is tagged, GitHub's releases page shows the changelog for that release.
 
 Git tags use bare version numbers (e.g. `0.1.0`, not `v0.1.0`).
 Building, publishing, and tagging are done manually after the release commit.
