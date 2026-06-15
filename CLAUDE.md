@@ -178,6 +178,7 @@ When writing or editing Markdown (docs, README, this file):
 ## Important Files
 
 - `docs/`: user-facing documentation (tracked in git): `building.md`, `querying.md`.
+- `skill/`: a Claude Code skill (tracked) bundling versiref-bible usage and an invalid-reference workflow; `skill/versiref-bible/scripts/scan_refs.py` scans Markdown for structurally invalid Bible references with source locations, reusing `versiref-search`'s style/versification config. See `skill/README.md` to install it.
 - `reference/`: the `versiref` API docs and sample `.cat` Bibles (gitignored; for AI-agent use).
 - `pyproject.toml`: package configuration and dependencies; sole source of the version number.
 - `src/versiref/bible/__init__.py`: public API exports.
