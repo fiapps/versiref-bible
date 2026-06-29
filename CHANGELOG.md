@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Added
+
+- `docs` subcommand: print the filesystem path to the bundled documentation. With no argument it prints the docs directory; pass a file name (e.g. `querying.md`) to print the path to a single doc.
+
+### Changed
+
+- User-facing documentation now ships inside the installed package (`src/versiref/bible/docs/`), so any environment with the package installed can locate version-matched docs via the `docs` subcommand without copying files around.
+
 ## 0.1.2 - 2026-06-14
 
 ### Added

@@ -3,6 +3,7 @@
 import os
 import sqlite3
 import sys
+from importlib.resources import files
 from pathlib import Path
 
 import click
@@ -281,6 +282,25 @@ def list_command() -> None:
         except (sqlite3.Error, OSError):
             title = "(unreadable)"
         click.echo(f"{db_file.stem}\t{versification}\t{count}\t{title}")
+
+
+@main.command()
+@click.argument("name", required=False)
+def docs(name: str | None) -> None:
+    """Print the filesystem path to the bundled documentation.
+
+    With no argument, prints the path to the bundled docs directory. Pass a
+    file NAME (e.g., querying.md) to print the path to that single doc.
+    """
+    docs_dir = files("versiref.bible") / "docs"
+    if name is not None:
+        target = docs_dir / name
+        if not target.is_file():
+            click.echo(f"Error: no such doc: {name}", err=True)
+            sys.exit(1)
+        click.echo(str(target))
+    else:
+        click.echo(str(docs_dir))
 
 
 if __name__ == "__main__":

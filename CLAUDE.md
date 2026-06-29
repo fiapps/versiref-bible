@@ -126,7 +126,7 @@ Databases built before the marker existed are unmarked and rejected with a "rebu
 - `builder.py`: `build_database` — parse the `.cat` file, map abbreviations, compute keys, skip-and-tally, write the DB.
 - `reader.py`: `show_verses`, `search_verses`, and the `format_verse` plain-text formatter.
 - `resolver.py`: resolve a Bible name or path to a `.db` file via `VERSIREF_BIBLE_PATH` (or the per-user `default_data_dir`); `resolve_bible`, `list_bibles`, `bible_search_path`, `BibleNotFoundError`.
-- `cli.py`: Click CLI with the `build`, `show`, `search`, `info`, and `list` commands. `show`/`search`/`info` accept a Bible name (resolved via `resolver.py`) or a path.
+- `cli.py`: Click CLI with the `build`, `show`, `search`, `info`, `list`, and `docs` commands. `show`/`search`/`info` accept a Bible name (resolved via `resolver.py`) or a path. `docs` prints the path to the bundled documentation (resolved with `importlib.resources.files`).
 - `__init__.py`: public API exports.
 
 Tests in `tests/` build a small in-memory fixture Bible and exercise build/show/search end to end.
@@ -190,7 +190,7 @@ When writing or editing Markdown (docs, README, this file):
 
 ## Important Files
 
-- `docs/`: user-facing documentation (tracked in git): `building.md`, `querying.md`.
+- `src/versiref/bible/docs/`: user-facing documentation (tracked in git): `building.md`, `querying.md`. Bundled into the package as package data — the `uv_build` backend includes the whole module directory in the wheel and sdist by default — and exposed via the `docs` CLI subcommand, which prints the path to the bundled copy resolved with `importlib.resources.files`.
 - `skill/`: a Claude Code skill (tracked) bundling versiref-bible usage and an invalid-reference workflow; `skill/versiref-bible/scripts/scan_refs.py` scans Markdown for structurally invalid Bible references with source locations, reusing `versiref-search`'s style/versification config. See `skill/README.md` to install it.
 - `reference/`: the `versiref` API docs and sample `.cat` Bibles (gitignored; for AI-agent use).
 - `pyproject.toml`: package configuration and dependencies; sole source of the version number.

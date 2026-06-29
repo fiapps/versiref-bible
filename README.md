@@ -12,8 +12,11 @@ verse per line as `reference⇥text` (TAB-separated).
 
 ## Documentation
 
-- [Building Databases](docs/building.md) — the `build` command (producers).
-- [Querying Databases](docs/querying.md) — the `show`, `search`, and `info` commands (consumers).
+- [Building Databases](src/versiref/bible/docs/building.md) — the `build` command (producers).
+- [Querying Databases](src/versiref/bible/docs/querying.md) — the `show`, `search`, and `info` commands (consumers).
+
+These files are bundled into the installed package; run `versiref-bible docs` to print the
+path to the bundled copy (or `versiref-bible docs querying.md` for a single file).
 
 ## Installation
 
@@ -54,7 +57,7 @@ as a bare **name** looked up on a search path. The search path comes from `VERSI
 (`os.pathsep`-separated, like `PATH`); when unset, a per-user data directory is searched (e.g.
 `~/Library/Application Support/versiref-bible` on macOS, `~/.local/share/versiref-bible` on
 Linux). Drop your `.db` files there and refer to them by name from any directory. See
-[Querying Databases](docs/querying.md#naming-a-database) for details.
+[Querying Databases](src/versiref/bible/docs/querying.md#naming-a-database) for details.
 
 ### `show` — print the verses of a reference
 
