@@ -192,7 +192,7 @@ When writing or editing Markdown (docs, README, this file):
 
 - `src/versiref/bible/docs/`: user-facing documentation (tracked in git): `building.md`, `querying.md`. Bundled into the package as package data — the `uv_build` backend includes the whole module directory in the wheel and sdist by default — and exposed via the `docs` CLI subcommand, which prints the path to the bundled copy resolved with `importlib.resources.files`.
 - `skill/`: a Claude Code skill (tracked) bundling versiref-bible usage and an invalid-reference workflow; `skill/versiref-bible/scripts/scan_refs.py` scans Markdown for structurally invalid Bible references with source locations, reusing `versiref-search`'s style/versification config. See `skill/README.md` to install it.
-- `reference/`: the `versiref` API docs and sample `.cat` Bibles (gitignored; for AI-agent use).
+- `reference/`: sample `.cat` Bibles (gitignored; for AI-agent use). For the `versiref` API docs, run `uv run versiref docs`, which prints the path to the bundled copy.
 - `pyproject.toml`: package configuration and dependencies; sole source of the version number.
 - `src/versiref/bible/__init__.py`: public API exports.
 - `uv.lock`: lock file for reproducible dependency resolution.
