@@ -35,6 +35,17 @@ It reports which book-name abbreviation sets the text needs and ranks named vers
 how many references are valid in each.
 Use the result to write (or confirm) the `config.yaml` and `metadata.yaml` you would pass to
 `versiref-search index` — the same files drive the scan in Step 2.
+
+`versiref list versifications` prints the valid scheme names to choose among, and when a specific
+reference looks invalid only because of a numbering difference, confirm it with `versiref convert`
+before treating it as an error:
+
+```sh
+uvx versiref convert "Ps 50:3" --style en-sbl --from lxx --to eng   # -> Ps 51:1 (Septuagint numbering)
+```
+
+If it converts cleanly into the document's versification, the citation is correct under a different
+scheme, not wrong.
 A minimal pair:
 
 ```yaml

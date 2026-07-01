@@ -66,6 +66,48 @@ uvx versiref-bible info kjv
 `en-sbl`) and, for `show`, `--from-versification` to map a reference in from another scheme.
 Search defaults to canonical verse order; add `--order relevance` for bm25 ranking.
 
+## Working with references directly: the `versiref` CLI
+
+The `versiref` package installs a `versiref` command for reference operations that need no Bible
+database — listing the bundled schemes, parsing, validating, and converting a reference between
+versifications.
+Every operation command takes `--style` (default `en-cmos_short`; pass `en-sbl` to match this
+skill's Bibles), `-v/--versification` (default `eng`), and `--json` for structured output.
+
+```sh
+# Discover the valid scheme names to pass elsewhere
+uvx versiref list versifications              # cei, eng, lxx, nabre, nova_vulgata, org, vulgata, ...
+uvx versiref list styles --pattern 'en-*'
+
+# Normalize or inspect a single reference
+uvx versiref parse "Jn 3:16-18" --style en-sbl
+uvx versiref parse "Ps 119:1ff" --json        # structured book/chapter/verse breakdown
+
+# Check one reference without writing a config file
+uvx versiref validate "Phil 5:1" --style en-sbl -v eng   # exit 0 valid, 1 out of range, 2 unparseable
+
+# Map a reference between versifications (Psalm numbering, deuterocanon)
+uvx versiref convert "Ps 50:3" --style en-sbl --from lxx --to eng   # -> Ps 51:1
+```
+
+`validate` is the quick, single-reference counterpart to `scripts/scan_refs.py`: use it to
+spot-check one citation, and the scanner to sweep a whole document.
+`convert` resolves the most common "looks invalid but isn't" case — a reference that is correct
+under a different Psalm or deuterocanon numbering (see the checking-references procedure below).
+
+## Bundled documentation
+
+Each sibling package ships its own Markdown docs and prints the containing directory with a `docs`
+subcommand — read these when you need behavior this skill does not spell out:
+
+```sh
+uvx versiref docs           # reference parsing, versifications, and the full versiref CLI (cli.md, api.md)
+uvx versiref-search docs    # analyze/index/search a corpus (indexing.md, searching.md)
+uvx versiref-bible docs     # building and querying Bible databases (building.md, querying.md)
+```
+
+Pass a filename to get the path to one file, e.g. `uvx versiref docs cli.md`.
+
 ## Finding and fixing invalid Scripture references
 
 When the task is to validate the Scripture references in a document — or to work out what a
