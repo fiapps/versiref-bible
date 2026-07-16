@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Added
+
+- `build` now strips recognized CCAT/BibleWorks markup from verse text before storage: `{...}` footnote blocks (including unterminated ones and stray trailing braces), `<N1>`/`<Ra>` note anchors, `<0430>` Strong's numbers, `(08799)` tense/voice/mood codes; `[italics]` and `<<Psalm superscriptions>>` are unwrapped, keeping their words. This keeps footnote text out of search results and stops Strong's numbers from breaking phrase queries. Stripping is tolerant — unrecognized markup is stored as-is and reported as a warning. Pass `--keep-markup` (Python: `keep_markup=True`) for the old verbatim behavior.
+- Public Python API: `strip_markup`.
+
 ## 0.2.0 - 2026-06-29
 
 ### Added

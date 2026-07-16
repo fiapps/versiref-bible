@@ -31,6 +31,14 @@ def main() -> None:
 def _report_build(stats: BuildStats, output: Path) -> None:
     """Print a build summary, sending skip warnings to stderr."""
     click.echo(f"✓ Built {output} ({stats.stored} verses)")
+    if stats.stripped_markup:
+        click.echo(f"  stripped markup from {stats.stripped_markup} verse(s)")
+    if stats.suspect_markup:
+        click.echo(
+            f"  warning: {stats.suspect_markup} verse(s) still contain "
+            "unrecognized markup after stripping",
+            err=True,
+        )
     if stats.unknown_books:
         total = sum(stats.unknown_books.values())
         names = ", ".join(sorted(stats.unknown_books))
@@ -89,6 +97,12 @@ def _report_build(stats: BuildStats, output: Path) -> None:
     show_default=True,
     help="Text encoding of the input file (e.g., cp1252).",
 )
+@click.option(
+    "--keep-markup",
+    is_flag=True,
+    help="Store verse text verbatim instead of stripping CCAT/BibleWorks "
+    "markup (footnotes, Strong's numbers, italics brackets).",
+)
 def build(
     input_file: Path,
     output_file: Path,
@@ -96,12 +110,15 @@ def build(
     title: str | None,
     book_style: str,
     encoding: str,
+    keep_markup: bool,
 ) -> None:
     """Build a Bible database from a CCAT-format text file.
 
     Each line of INPUT_FILE is read as ``Abbrev C:V text``. Lines whose book
     abbreviation is unrecognized, or whose book is not in the chosen
-    versification, are skipped with a warning.
+    versification, are skipped with a warning. Recognized CCAT/BibleWorks
+    markup (footnotes, Strong's numbers, italics brackets) is stripped from
+    the verse text unless ``--keep-markup`` is given.
     """
     output = output_file
     try:
@@ -112,6 +129,7 @@ def build(
             title=title,
             book_style=book_style,
             encoding=encoding,
+            keep_markup=keep_markup,
         )
         _report_build(stats, output)
     except (ValueError, LookupError, OSError) as exc:

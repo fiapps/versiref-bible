@@ -34,12 +34,31 @@ Each line is `Abbrev C:V text`:
 - **`Abbrev`** — a book abbreviation. By default these are read as BibleWorks-style names
   (versiref's `en-bibleworks` style); change this with `--book-style`.
 - **`C:V`** — chapter and verse, colon-separated.
-- **`text`** — the verse text, taken verbatim. CCAT footnotes and inline formatting are kept
-  as plain text for now; parsing them is future work. (For example, KJV Strong's numbers like
-  `<07225>` are stored as-is.)
+- **`text`** — the verse text.
+  Recognized CCAT/BibleWorks markup is stripped before storage (see [Markup stripping](#markup-stripping) below); pass `--keep-markup` to store lines verbatim.
 
 Each verse is stored as one row, keyed by an integer verse key (`BBCCCVVV`) computed under the
 chosen versification, and indexed for full-text search with SQLite FTS5.
+
+## Markup Stripping
+
+BibleWorks CCAT exports decorate the verse text with inline markup that would break phrase search (Strong's numbers interrupt word sequences) and pollute results (footnote text matches queries).
+By default, `build` strips the recognized markup so the stored text — and therefore FTS — is clean:
+
+| Markup | Example | Handling |
+| ------ | ------- | -------- |
+| Footnote block | `{<p><rsup>a</rsup> Pro 8:27-29 }` | Removed (an unterminated block runs to end of line; a stray trailing `}` is also dropped) |
+| Note/cross-reference anchor | `made<N1>`, `<Ra>separated` | Removed |
+| Strong's number | `<0430>` (Hebrew), `<5547>` (Greek) | Removed |
+| Tense/voice/mood code | `(08799)` | Removed |
+| Translator-supplied italics | `[that]` | Unwrapped — the word is kept |
+| Psalm superscription | `<<A Psalm of David.>>` | Unwrapped — the title text is kept |
+
+Stripping is tolerant: only these recognized shapes are removed, and anything else is stored as-is.
+A verse that still contains markup-like characters (`<`, `>`, `{`, `}`) after stripping is counted and reported as a warning, so a new source file's unrecognized quirks surface at build time instead of as silent search misses.
+The note and cross-reference *content* is currently discarded, not stored; since the database is cheap to regenerate from the `.cat` file, nothing is lost if a future version learns to store it.
+
+Pass `--keep-markup` to skip stripping entirely and store each line's text verbatim.
 
 ## Choosing a Versification
 
@@ -104,6 +123,7 @@ versiref-bible build [OPTIONS] INPUT_FILE
 | `--title` | Human-readable title stored in the database metadata |
 | `--book-style` | Reference style whose names map the file's abbreviations (default: `en-bibleworks`) |
 | `--encoding` | Text encoding of the input file (default: `utf-8`) |
+| `--keep-markup` | Store verse text verbatim instead of stripping CCAT/BibleWorks markup |
 
 ## Stored Metadata
 

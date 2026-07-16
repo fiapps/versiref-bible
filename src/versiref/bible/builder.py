@@ -6,6 +6,7 @@ from pathlib import Path
 from versiref import RefStyle, SimpleBibleRef, Versification
 
 from .database import PRODUCT_NAME, SCHEMA_VERSION, Database
+from .ccat_markup import has_markup_residue, strip_markup
 from .models import BuildStats, Verse
 
 
@@ -13,8 +14,8 @@ def _parse_line(line: str) -> tuple[str, int, int, str] | None:
     """Parse one CCAT line ``Abbrev C:V text`` into its components.
 
     Returns ``(abbrev, chapter, verse, text)`` or ``None`` if the line does not
-    match the expected shape. CCAT footnotes/formatting in ``text`` are kept
-    verbatim (parsing them is future work).
+    match the expected shape. ``text`` is the rest of the line verbatim; any
+    markup handling happens later (see :func:`build_database`).
     """
     abbrev, _, rest = line.partition(" ")
     cv, _, text = rest.partition(" ")
@@ -35,6 +36,7 @@ def build_database(
     title: str | None = None,
     book_style: str = "en-bibleworks",
     encoding: str = "utf-8",
+    keep_markup: bool = False,
 ) -> BuildStats:
     """Build a Bible database from a CCAT-format ``.cat`` file.
 
@@ -43,6 +45,12 @@ def build_database(
     verse key is computed under ``versification``. Lines whose abbreviation is
     unrecognized (e.g. the Sirach prologue ``Sip``) or whose book is absent from
     the versification are warned-and-skipped — see :class:`BuildStats`.
+
+    Recognized CCAT/BibleWorks markup (footnote blocks, note anchors, Strong's
+    numbers, italics brackets) is stripped from the verse text before storage
+    so full-text search sees clean text; pass ``keep_markup=True`` to store
+    lines verbatim instead. Stripping is tolerant: unrecognized markup is kept
+    and tallied (``BuildStats.suspect_markup``), never fatal.
 
     Args:
         input_path: Source ``.cat`` file.
@@ -53,6 +61,8 @@ def build_database(
             file's book abbreviations (default ``en-bibleworks``).
         encoding: Text encoding of the input file (e.g., ``cp1252``;
             default ``utf-8``).
+        keep_markup: Store verse text verbatim instead of stripping
+            recognized markup (default ``False``).
 
     Returns:
         A :class:`BuildStats` summary of what was stored and skipped.
@@ -91,6 +101,14 @@ def build_database(
                     stats.off_scheme_books.get(abbrev, 0) + 1
                 )
                 continue
+
+            if not keep_markup:
+                cleaned = strip_markup(text)
+                if cleaned != text:
+                    stats.stripped_markup += 1
+                    text = cleaned
+                if has_markup_residue(text):
+                    stats.suspect_markup += 1
 
             key = ranges[0][0]
             if key in verses:

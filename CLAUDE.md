@@ -122,8 +122,9 @@ Databases built before the marker existed are unmarked and rejected with a "rebu
 ### Source Modules (`src/versiref/bible/`)
 
 - `models.py`: `Verse` and `BuildStats` data classes.
+- `ccat_markup.py`: `strip_markup` removes recognized BibleWorks/CCAT markup (footnote blocks, note anchors, Strong's numbers, tense/voice/mood codes; italics brackets and Psalm superscriptions are unwrapped, keeping their words); `has_markup_residue` flags leftover markup-like characters. Stripping is tolerant — unrecognized markup is kept and tallied (`BuildStats.suspect_markup`), never fatal. Named for the input format because other formats may be supported later.
 - `database.py`: schema and the `Database` wrapper (insert, rebuild FTS, range and FTS queries, counts); `validate_schema`, `PRODUCT_NAME`, `IncompatibleDatabaseError`.
-- `builder.py`: `build_database` — parse the `.cat` file, map abbreviations, compute keys, skip-and-tally, write the DB.
+- `builder.py`: `build_database` — parse the `.cat` file, map abbreviations, compute keys, strip markup (unless `keep_markup=True`), skip-and-tally, write the DB.
 - `reader.py`: `show_verses`, `search_verses`, and the `format_verse` plain-text formatter.
 - `resolver.py`: resolve a Bible name or path to a `.db` file via `VERSIREF_BIBLE_PATH` (or the per-user `default_data_dir`); `resolve_bible`, `list_bibles`, `bible_search_path`, `BibleNotFoundError`.
 - `cli.py`: Click CLI with the `build`, `show`, `search`, `info`, `list`, and `docs` commands. `show`/`search`/`info` accept a Bible name (resolved via `resolver.py`) or a path. `docs` prints the path to the bundled documentation (resolved with `importlib.resources.files`).
@@ -135,7 +136,8 @@ Tests in `tests/` build a small in-memory fixture Bible and exercise build/show/
 
 Input is CCAT-format `.cat` text, one verse per line: `Abbrev C:V text`.
 The abbreviation is a BibleWorks-style book name (`en-bibleworks`) by default.
-CCAT footnotes and inline formatting are treated as **plain text** for now; parsing them is future work.
+Recognized CCAT/BibleWorks markup — `{...}` footnote blocks (terminated, unterminated, or a stray trailing `}`), `<N1>`/`<Ra>` note anchors, `<0430>` Strong's numbers, `(08799)` tense/voice/mood codes, `[italics]`, and `<<Psalm superscriptions>>` (the latter two unwrapped, keeping the words) — is stripped by `ccat_markup.py` before storage so FTS sees clean text; `--keep-markup` stores lines verbatim.
+The footnote/cross-reference *content* is discarded, not stored; extracting it into structured tables (cross-references as verse-key ranges, Strong's numbers per verse) is future work, and would be an additive schema-minor bump.
 The sample CEI 2008 file is `cp1252`, not UTF-8, so `build` accepts `--encoding`.
 
 Sample `.cat` Bibles live in `reference/samples/` (gitignored): a Brenton LXX (Old Testament and Apocrypha, **no New Testament**), a KJV (Strong's numbers kept as plain text), and an Italian CEI 2008.

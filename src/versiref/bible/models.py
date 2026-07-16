@@ -38,6 +38,11 @@ class BuildStats:
             ``Abbrev C:V text``.
         duplicates: Number of lines whose verse key collided with an earlier
             line (later line wins).
+        stripped_markup: Number of stored verses whose text had recognized
+            CCAT/BibleWorks markup stripped.
+        suspect_markup: Number of stored verses whose text still contains
+            markup-like characters after stripping (unrecognized markup,
+            kept verbatim).
 
     """
 
@@ -46,3 +51,5 @@ class BuildStats:
     off_scheme_books: dict[str, int] = field(default_factory=dict)
     malformed: int = 0
     duplicates: int = 0
+    stripped_markup: int = 0
+    suspect_markup: int = 0
