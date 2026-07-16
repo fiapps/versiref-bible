@@ -15,6 +15,7 @@ It extends the [versiref](https://github.com/fiapps/versiref) ecosystem and is a
 ## Development Commands
 
 ### Package Management
+
 ```sh
 # Install dependencies and sync environment
 uv sync
@@ -27,6 +28,7 @@ uv run versiref-bible --help
 ```
 
 ### Testing, Type Checking, Linting
+
 ```sh
 uv run pytest        # tests live in tests/
 uv run mypy src      # type checking
@@ -72,6 +74,7 @@ Each Bible is a single SQLite database (`database.py`) with three tables:
 ### Verse Encoding
 
 Verse keys are integers of the form `BBCCCVVV`:
+
 - BB: book number according to the versification's book order.
 - CCC: chapter (001-999).
 - VVV: verse (001-999).
@@ -93,6 +96,7 @@ Each pair stays within one book, so the `BETWEEN` is always safe, including acro
 `build` (`builder.py`) never aborts on unusable lines; it skips and tallies them in `BuildStats`.
 It maps the file's book abbreviation to a book ID via `RefStyle.named(book_style).recognized_names` — it does **not** call `RefParser.parse` on data lines.
 A line is skipped when:
+
 - the abbreviation is not recognized (e.g. the Sirach prologue `Sip`, which is not a canonical book), or
 - the book is not in the chosen versification.
 
@@ -162,6 +166,7 @@ Sample `.cat` Bibles live in `reference/samples/` (gitignored): a Brenton LXX (O
 This project uses `uv_build` as the build backend (see `pyproject.toml`), configured as a namespace package under `versiref.bible` (no `src/versiref/__init__.py`).
 
 Key configuration:
+
 - Build backend: `uv_build>=0.9.28,<0.10.0`
 - Module name: `versiref.bible`
 
@@ -187,8 +192,9 @@ When asked to make a release, Claude performs steps 1–8; publishing and pushin
 ## Markdown Style
 
 When writing or editing Markdown (docs, README, this file):
+
 - One sentence per line; do not hard-wrap at a column width.
-- Always specify a language on fenced code blocks (e.g. ```sh, ```python).
+- Always specify a language on fenced code blocks (e.g. `` ```sh ``, `` ```python ``).
 
 ## Important Files
 
