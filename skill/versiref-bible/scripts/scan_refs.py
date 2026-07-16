@@ -1,7 +1,7 @@
 #!/usr/bin/env -S uv run --script
 # /// script
 # requires-python = ">=3.10"
-# dependencies = ["versiref>=0.5.1", "pyyaml>=6"]
+# dependencies = ["versiref>=0.8.1", "pyyaml>=6"]
 # ///
 """Scan Markdown for invalid Bible references, reporting source-file locations.
 
@@ -19,14 +19,15 @@ so point it at the same config/metadata you already use:
 
 Each invalid reference is printed as a single tab-separated record::
 
-    chapter1.md:142:18	Phil 5:1	no such chapter (Phil has 4 chapters)
+    chapter1.md:142:18	Phil 5:1	Phil has no chapter 5 (only 4 chapters)
         | As Paul writes in Phil 5:1, and again in ...
 
-A reference is invalid if *any* of its verse ranges is; when it has more than
-one range, the reason names each offending range so the bad part stands out::
+A reference is invalid if *any* of its verse ranges is; when more than one
+range is invalid, each reason is reported, joined by "; ", so every bad part
+stands out::
 
-    psalter.md:7:5	Ps 1:1; 2:12; 119:1	Ps 2:12: no such verse (Ps 2 has 11 verses)
-        | See Ps 1:1; 2:12; 119:1 for the theme.
+    psalter.md:7:5	Ps 1:1; 2:99; 200:1	Ps 2 has no verse 99 (only 12 verses); Ps has no chapter 200 (only 150 chapters)
+        | See Ps 1:1; 2:99; 200:1 for the theme.
 
 Validity is structural only — a reference that names a chapter or verse outside
 the versification, or a book outside its canon. A reference that is structurally
@@ -135,61 +136,6 @@ def resolve_settings(
     return ref_style, versification, str(vers_name), sensitivity
 
 
-def _start_key(sub_ref, versification: Versification) -> int | None:
-    """Return the BBCCCVVV key of a simple reference's first verse."""
-    try:
-        keys = list(sub_ref.range_keys(versification))
-    except TypeError:
-        keys = list(sub_ref.range_keys())
-    if not keys:
-        return None
-    first = keys[0]
-    return first[0] if isinstance(first, tuple) else first
-
-
-def invalid_reason(
-    versification: Versification,
-    vers_name: str,
-    book_id: str,
-    book_label: str,
-    chapter: int,
-    verse: int,
-) -> str:
-    """Explain why a (book, chapter, verse) is invalid under the versification.
-
-    ``book_id`` is the Paratext code used to look up the versification;
-    ``book_label`` is the reader-facing name to show (the document's style,
-    e.g. ``Ps``), since the output is meant to be read by an LLM.
-    """
-    if not versification.includes(book_id):
-        return f"book not in versification '{vers_name}'"
-    chapters = versification.max_verses.get(book_id, [])
-    if chapter < 1 or chapter > len(chapters):
-        return f"no such chapter ({book_label} has {len(chapters)} chapters)"
-    max_verse = chapters[chapter - 1]
-    if verse < 1 or verse > max_verse:
-        return f"no such verse ({book_label} {chapter} has {max_verse} verses)"
-    return "out of range"
-
-
-def _sub_reason(
-    ref_style: RefStyle, versification: Versification, vers_name: str, sub
-) -> str | None:
-    """Explain why a single-book sub-ref is invalid, or None if it is valid."""
-    label = ref_style.names.get(sub.book_id, sub.book_id)
-    if not versification.includes(sub.book_id):
-        return invalid_reason(versification, vers_name, sub.book_id, label, 0, 0)
-    if sub.is_valid(versification):
-        return None
-    key = _start_key(sub, versification)
-    if key is None:
-        return "out of range"
-    chapter, verse = (key // 1000) % 1000, key % 1000
-    return invalid_reason(
-        versification, vers_name, sub.book_id, label, chapter, verse
-    )
-
-
 def _line_col(text: str, pos: int) -> tuple[int, int, str]:
     """Return (1-based line, 1-based column, full line text) for an offset."""
     line_start = text.rfind("\n", 0, pos) + 1
@@ -204,34 +150,24 @@ def scan_text(
     text: str,
     parser: RefParser,
     ref_style: RefStyle,
-    versification: Versification,
-    vers_name: str,
     sensitivity: Sensitivity,
 ) -> list[tuple[int, int, str, str, str]]:
     """Find invalid references in ``text``.
 
     Returns ``(line, col, reference_text, reason, line_text)`` for each invalid
-    reference, in document order. A reference is invalid if *any* of its verse
-    ranges is invalid; when it has more than one range, the reason names each
-    offending range (e.g. ``Ps 2:12``) so the bad part is easy to spot.
+    reference, in document order. Validity — and the explanatory reason — comes
+    from ``BibleRef.invalid_reason``: a reference is invalid if *any* of its
+    verse ranges is, and when more than one range is invalid each reason is
+    reported, joined by "; ", so every bad part stands out. ``ref_style`` is
+    passed so books are named in the document's style (e.g. ``Ps``).
     """
     findings: list[tuple[int, int, str, str, str]] = []
     for ref, start, end in parser.scan_string(text, sensitivity=sensitivity):
-        ranges = list(ref.range_refs())
-        reasons: list[str] = []
-        for range_ref in ranges:
-            reason = _sub_reason(
-                ref_style, versification, vers_name, range_ref.simple_refs[0]
-            )
-            if reason is None:
-                continue
-            if len(ranges) > 1:
-                reason = f"{range_ref.format(ref_style)}: {reason}"
-            reasons.append(reason)
-        if not reasons:
+        reason = ref.invalid_reason(ref_style)
+        if reason is None:
             continue
         line_no, col, line_text = _line_col(text, start)
-        findings.append((line_no, col, text[start:end], "; ".join(reasons), line_text))
+        findings.append((line_no, col, text[start:end], reason, line_text))
     return findings
 
 
@@ -271,7 +207,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"Error: {exc}", file=sys.stderr)
             return 2
         for line_no, col, snippet, reason, line_text in scan_text(
-            text, parser, ref_style, versification, vers_name, sensitivity
+            text, parser, ref_style, sensitivity
         ):
             total += 1
             print(f"{path}:{line_no}:{col}\t{snippet}\t{reason}")
