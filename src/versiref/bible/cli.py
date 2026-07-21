@@ -103,6 +103,12 @@ def _report_build(stats: BuildStats, output: Path) -> None:
     help="Store verse text verbatim instead of stripping CCAT/BibleWorks "
     "markup (footnotes, Strong's numbers, italics brackets).",
 )
+@click.option(
+    "--chapter-letters",
+    is_flag=True,
+    help="Recognize NABRE-style chapter letters for the Additions to Esther "
+    "(Est A:1 -> ESG); overlays them onto --book-style.",
+)
 def build(
     input_file: Path,
     output_file: Path,
@@ -111,6 +117,7 @@ def build(
     book_style: str,
     encoding: str,
     keep_markup: bool,
+    chapter_letters: bool,
 ) -> None:
     """Build a Bible database from a CCAT-format text file.
 
@@ -119,6 +126,9 @@ def build(
     versification, are skipped with a warning. Recognized CCAT/BibleWorks
     markup (footnotes, Strong's numbers, italics brackets) is stripped from
     the verse text unless ``--keep-markup`` is given.
+
+    Pass ``--chapter-letters`` for a file that numbers the Additions to Esther
+    as chapters A-F (Est A:1 ... Est F:11), as the NABRE prints them.
     """
     output = output_file
     try:
@@ -130,6 +140,7 @@ def build(
             book_style=book_style,
             encoding=encoding,
             keep_markup=keep_markup,
+            chapter_letters=chapter_letters,
         )
         _report_build(stats, output)
     except (ValueError, LookupError, OSError) as exc:

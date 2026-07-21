@@ -16,7 +16,7 @@ PRODUCT_NAME = "versiref-bible"
 # Minor bumps are additive (new tables/columns); a major bump signals a
 # breaking change. Code requiring X.Y accepts any database whose major equals
 # X and whose minor is >= Y.
-SCHEMA_VERSION = "1.0"
+SCHEMA_VERSION = "2.0"
 
 
 class IncompatibleDatabaseError(Exception):
@@ -46,8 +46,9 @@ CREATE TABLE IF NOT EXISTS metadata (
     value TEXT NOT NULL
 );
 
--- One row per Bible verse. verse_key is the BBCCCVVV integer computed under
--- the database's versification; it doubles as the FTS5 rowid.
+-- One row per Bible verse. verse_key is the BBCCCVVVSS integer computed under
+-- the database's versification (the trailing SS is a subverse ordinal); it
+-- doubles as the FTS5 rowid.
 CREATE TABLE IF NOT EXISTS verses (
     verse_key INTEGER PRIMARY KEY,
     book_id   TEXT NOT NULL,

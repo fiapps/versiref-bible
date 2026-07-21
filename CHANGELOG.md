@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Added
+
+- `build` accepts `--chapter-letters` (Python: `chapter_letters=True`) for source files that number the Additions to Esther as chapters A–F, as the NABRE prints them: `Est A:1` … `Est F:11` parse as the Greek Esther book (`ESG`) while a numeric `Est 1:1` still resolves to plain Esther. The switch overlays the letters (from versiref's `en-nabre` style) onto `--book-style`, so a versification that maps `ESG` (e.g. `nabre`) is required.
+
+### Changed
+
+- `build` now resolves each line's leading `Abbrev C:V` by parsing it with the book style (via versiref's `RefParser`) instead of a bare abbreviation lookup, which is what enables chapter letters. Off-scheme tolerance and the warn-and-skip tallies are unchanged.
+- Requires versiref >= 0.10.0, which widens the integer verse key from `BBCCCVVV` to `BBCCCVVVSS` (a trailing subverse ordinal). This gives inserted verses such as the Greek additions to Esther (`ESG 4:17a`–`z`) distinct, correctly ordered keys instead of colliding on their base verse's key. The package treats keys as opaque, so only their stored width changes.
+- **Schema version bumped to 2.0 (breaking).** Because the wider keys change the on-disk data, databases built before this release (schema 1.x, 8-digit keys) can no longer be queried correctly; they are now rejected up front with the usual "rebuild the Bible" message rather than silently returning no matches. Rebuild any existing Bible with this version.
+
 ## 0.3.0 - 2026-07-15
 
 ### Added

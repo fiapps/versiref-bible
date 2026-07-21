@@ -8,8 +8,9 @@ class Verse:
     """A single Bible verse stored in the database.
 
     Attributes:
-        key: Integer verse key (BBCCCVVV) from ``range_keys`` under the
-            database's versification; also the FTS5 rowid.
+        key: Integer verse key (BBCCCVVVSS, the trailing SS a subverse ordinal)
+            from ``range_keys`` under the database's versification; also the
+            FTS5 rowid.
         book_id: Paratext book ID (e.g. ``JHN``).
         chapter: Chapter number.
         verse: Verse number.

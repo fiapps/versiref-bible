@@ -64,7 +64,10 @@ def test_validate_rejects_foreign_product(bible_db: Path) -> None:
 
 
 def test_validate_rejects_incompatible_major(bible_db: Path) -> None:
-    _set_meta(bible_db, "schema_version", "2.0")
+    # A schema 1.x database is the pre-0.10 format with 8-digit verse keys;
+    # under the current major (2) it is rejected so it gets rebuilt rather than
+    # silently returning no matches against 10-digit keys.
+    _set_meta(bible_db, "schema_version", "1.0")
     with Database(bible_db) as db, pytest.raises(IncompatibleDatabaseError, match="incompatible"):
         db.validate_schema()
 
@@ -77,7 +80,7 @@ def test_validate_rejects_unparseable_version(bible_db: Path) -> None:
 
 def test_validate_accepts_higher_minor(bible_db: Path) -> None:
     # Same major, higher minor is forward-compatible (additive schema rule).
-    _set_meta(bible_db, "schema_version", "1.9")
+    _set_meta(bible_db, "schema_version", "2.9")
     with Database(bible_db) as db:
         db.validate_schema()  # does not raise
 

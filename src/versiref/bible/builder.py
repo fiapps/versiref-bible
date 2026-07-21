@@ -3,29 +3,32 @@
 import datetime
 from pathlib import Path
 
-from versiref import RefStyle, SimpleBibleRef, Versification
+from versiref import RefParser, RefStyle, Versification
 
 from .database import PRODUCT_NAME, SCHEMA_VERSION, Database
 from .ccat_markup import has_markup_residue, strip_markup
 from .models import BuildStats, Verse
 
+# Bundled style that defines the NABRE's Esther chapter letters (ESG A–F). When
+# ``chapter_letters=True``, the build overlays this style's ``chapter_letters``
+# onto the chosen book style so a lettered chapter parses; the letter table
+# itself lives in versiref, not here (see :func:`build_database`).
+_CHAPTER_LETTER_STYLE = "en-nabre"
 
-def _parse_line(line: str) -> tuple[str, int, int, str] | None:
-    """Parse one CCAT line ``Abbrev C:V text`` into its components.
 
-    Returns ``(abbrev, chapter, verse, text)`` or ``None`` if the line does not
-    match the expected shape. ``text`` is the rest of the line verbatim; any
-    markup handling happens later (see :func:`build_database`).
+def _split_reference(line: str) -> tuple[str, str, str] | None:
+    """Split a CCAT line ``Abbrev C:V text`` into ``(abbrev, reference, text)``.
+
+    ``reference`` is ``"Abbrev C:V"`` for the parser; ``text`` is the rest of
+    the line verbatim (markup handling happens later, see
+    :func:`build_database`). Returns ``None`` if the line lacks the ``Abbrev
+    C:V`` shape (no book token, or no ``:`` in the chapter/verse token).
     """
     abbrev, _, rest = line.partition(" ")
     cv, _, text = rest.partition(" ")
     if not abbrev or ":" not in cv:
         return None
-    chapter_s, _, verse_s = cv.partition(":")
-    try:
-        return abbrev, int(chapter_s), int(verse_s), text
-    except ValueError:
-        return None
+    return abbrev, f"{abbrev} {cv}", text
 
 
 def build_database(
@@ -37,14 +40,22 @@ def build_database(
     book_style: str = "en-bibleworks",
     encoding: str = "utf-8",
     keep_markup: bool = False,
+    chapter_letters: bool = False,
 ) -> BuildStats:
     """Build a Bible database from a CCAT-format ``.cat`` file.
 
-    Each non-blank line is read as ``Abbrev C:V text``. The abbreviation is
-    mapped to a Paratext book ID via the ``book_style`` recognized names, and a
-    verse key is computed under ``versification``. Lines whose abbreviation is
-    unrecognized (e.g. the Sirach prologue ``Sip``) or whose book is absent from
-    the versification are warned-and-skipped — see :class:`BuildStats`.
+    Each non-blank line is read as ``Abbrev C:V text``. The leading
+    ``Abbrev C:V`` is resolved to a book ID, chapter, and verse by parsing it
+    with ``book_style`` (via :class:`~versiref.RefParser`), and a verse key is
+    computed under ``versification``. Lines whose abbreviation is unrecognized
+    (e.g. the Sirach prologue ``Sip``) or whose book is absent from the
+    versification are warned-and-skipped — see :class:`BuildStats`.
+
+    Parsing (rather than a bare abbreviation lookup) lets the file use the
+    book's own chapter styling, including the NABRE-style chapter letters for
+    the Additions to Esther (``Est A:1`` → ESG). Those letters are not in the
+    default ``en-bibleworks`` style, so pass ``chapter_letters=True`` to overlay
+    them (sourced from the bundled ``en-nabre`` style) onto ``book_style``.
 
     Recognized CCAT/BibleWorks markup (footnote blocks, note anchors, Strong's
     numbers, italics brackets) is stripped from the verse text before storage
@@ -63,6 +74,9 @@ def build_database(
             default ``utf-8``).
         keep_markup: Store verse text verbatim instead of stripping
             recognized markup (default ``False``).
+        chapter_letters: Overlay the NABRE Esther chapter letters (ESG A–F,
+            from the ``en-nabre`` style) onto ``book_style`` so a lettered
+            chapter such as ``Est A:1`` parses (default ``False``).
 
     Returns:
         A :class:`BuildStats` summary of what was stored and skipped.
@@ -72,7 +86,14 @@ def build_database(
     output_path = Path(output_path)
 
     vers = Versification.named(versification)
-    recognized = RefStyle.named(book_style).recognized_names
+    style = RefStyle.named(book_style)
+    if chapter_letters:
+        # Mutate the freshly loaded style in place (named() returns a new
+        # instance each call, so this affects no one else): the switch is just
+        # sugar for building with a style that carries the letters.
+        style.chapter_letters = RefStyle.named(_CHAPTER_LETTER_STYLE).chapter_letters
+    parser = RefParser(style, vers)
+    recognized = style.recognized_names
 
     stats = BuildStats()
     verses: dict[int, Verse] = {}
@@ -82,20 +103,27 @@ def build_database(
             line = raw.rstrip("\n")
             if not line.strip():
                 continue
-            parsed = _parse_line(line)
-            if parsed is None:
+            split = _split_reference(line)
+            if split is None:
                 stats.malformed += 1
                 continue
-            abbrev, chapter, verse, text = parsed
+            abbrev, reference, text = split
 
-            book_id = recognized.get(abbrev)
-            if book_id is None:
-                stats.unknown_books[abbrev] = stats.unknown_books.get(abbrev, 0) + 1
+            # parse_simple fails only on grammar (an unrecognized book or a
+            # malformed chapter/verse), never on a verse number that exceeds the
+            # versification's chapter length, so off-scheme verses survive to be
+            # gated on range_keys below.
+            ref = parser.parse_simple(reference, silent=True)
+            if ref is None:
+                if abbrev in recognized:
+                    stats.malformed += 1
+                else:
+                    stats.unknown_books[abbrev] = stats.unknown_books.get(abbrev, 0) + 1
                 continue
 
             # range_keys yields nothing when the book is not in this
             # versification; that is the off-scheme, warn-and-skip case.
-            ranges = list(SimpleBibleRef.for_range(book_id, chapter, verse).range_keys(vers))
+            ranges = list(ref.range_keys(vers))
             if not ranges:
                 stats.off_scheme_books[abbrev] = (
                     stats.off_scheme_books.get(abbrev, 0) + 1
@@ -111,9 +139,12 @@ def build_database(
                     stats.suspect_markup += 1
 
             key = ranges[0][0]
+            range_ref = ref.ranges[0]
             if key in verses:
                 stats.duplicates += 1
-            verses[key] = Verse(key, book_id, chapter, verse, text)
+            verses[key] = Verse(
+                key, ref.book_id, range_ref.start_chapter, range_ref.start_verse, text
+            )
 
     stats.stored = len(verses)
 

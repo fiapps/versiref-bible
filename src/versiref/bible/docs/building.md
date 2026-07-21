@@ -37,8 +37,21 @@ Each line is `Abbrev C:V text`:
 - **`text`** — the verse text.
   Recognized CCAT/BibleWorks markup is stripped before storage (see [Markup stripping](#markup-stripping) below); pass `--keep-markup` to store lines verbatim.
 
-Each verse is stored as one row, keyed by an integer verse key (`BBCCCVVV`) computed under the
+Each verse is stored as one row, keyed by an integer verse key (`BBCCCVVVSS`) computed under the
 chosen versification, and indexed for full-text search with SQLite FTS5.
+
+## Chapter letters (Additions to Esther)
+
+The NABRE prints the Additions to Esther as chapters **A–F** rather than numbering them as verses of the surrounding Greek chapters.
+If your source file follows that convention — `Est A:1`, `Est A:2`, … `Est F:11` — pass `--chapter-letters` so the lettered chapters parse as the Greek Esther book (`ESG`):
+
+```sh
+versiref-bible build nab.cat -o nabre.db --versification nabre --chapter-letters
+```
+
+The switch overlays the letters onto whatever `--book-style` you use, so BibleWorks abbreviations keep working; a numeric `Est 1:1` still resolves to plain Esther (`EST`).
+The letters are defined by versiref's `en-nabre` style, so a versification that maps `ESG` (such as `nabre`) is required — otherwise the lettered lines are [skipped as off-scheme](#skipped-lines).
+To see the letters in output, query with a letter-aware style, e.g. `--style en-nabre`.
 
 ## Markup Stripping
 
