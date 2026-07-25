@@ -158,3 +158,30 @@ def test_chapter_letters_off_scheme_when_book_absent(tmp_path: Path) -> None:
     assert stats.stored == 1
     assert stats.off_scheme_books.get("Est") == 2
     assert stats.malformed == 0
+
+
+# The Greek additions to Esther letter their verses a, b, c, …, and CEI 2008
+# uses the letter ``f`` (e.g. Est 1:1f). Left as the "and following" marker,
+# ``f`` would parse away and fold that verse onto its base verse.
+ESTHER_LETTER_F_SAMPLE = """\
+Esg 1:1 The dream of Mordecai, opening the additions.
+Esg 1:1f A lettered addition verse whose letter is f.
+Esg 1:2 The narrative continues after the dream.
+"""
+
+
+def test_following_notation_disabled_keeps_verse_letter_f(tmp_path: Path) -> None:
+    source = tmp_path / "esther.cat"
+    source.write_text(ESTHER_LETTER_F_SAMPLE, encoding="utf-8")
+    db_path = tmp_path / "esther.db"
+    stats = build_database(source, db_path, versification="cei")
+    # All three lines get distinct keys: 1:1f is not folded onto 1:1.
+    assert stats.stored == 3
+    assert stats.duplicates == 0
+    # A range spanning the base verses includes the lettered verse between them.
+    verses, _ = show_verses(db_path, "Esg 1:1-2", style_name="en-bibleworks")
+    assert [v.text for v in verses] == [
+        "The dream of Mordecai, opening the additions.",
+        "A lettered addition verse whose letter is f.",
+        "The narrative continues after the dream.",
+    ]

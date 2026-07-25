@@ -15,6 +15,16 @@ from .models import BuildStats, Verse
 # itself lives in versiref, not here (see :func:`build_database`).
 _CHAPTER_LETTER_STYLE = "en-nabre"
 
+# A CCAT file numbers every verse explicitly, so the SBL-style "and following"
+# notation (``f``/``ff``) never appears in one. Left enabled, versiref reads a
+# trailing ``f``/``ff`` on a reference as that notation, which shadows the verse
+# *letters* ``f``/``ff`` that the Greek additions to Esther use (Est 1:1f,
+# 4:17f, …), folding those sub-verses onto their base verse. The build disables
+# the notation by pointing its markers at tokens no reference can equal (a
+# sub-verse is one or two lowercase letters, never containing a NUL).
+_DISABLED_FOLLOWING_VERSE = "\x00f"
+_DISABLED_FOLLOWING_VERSES = "\x00ff"
+
 
 def _split_reference(line: str) -> tuple[str, str, str] | None:
     """Split a CCAT line ``Abbrev C:V text`` into ``(abbrev, reference, text)``.
@@ -57,6 +67,11 @@ def build_database(
     default ``en-bibleworks`` style, so pass ``chapter_letters=True`` to overlay
     them (sourced from the bundled ``en-nabre`` style) onto ``book_style``.
 
+    The "and following" notation (``f``/``ff``) is disabled while parsing, since
+    a CCAT file spells out every verse and never uses it; this frees the verse
+    letters ``f``/``ff`` for the Greek additions to Esther (see
+    :data:`_DISABLED_FOLLOWING_VERSE`).
+
     Recognized CCAT/BibleWorks markup (footnote blocks, note anchors, Strong's
     numbers, italics brackets) is stripped from the verse text before storage
     so full-text search sees clean text; pass ``keep_markup=True`` to store
@@ -87,6 +102,10 @@ def build_database(
 
     vers = Versification.named(versification)
     style = RefStyle.named(book_style)
+    # Mutate the freshly loaded style in place (named() returns a new instance
+    # each call, so this affects no one else). See _DISABLED_FOLLOWING_VERSE.
+    style.following_verse = _DISABLED_FOLLOWING_VERSE
+    style.following_verses = _DISABLED_FOLLOWING_VERSES
     if chapter_letters:
         # Mutate the freshly loaded style in place (named() returns a new
         # instance each call, so this affects no one else): the switch is just
