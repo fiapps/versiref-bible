@@ -50,6 +50,63 @@ def test_psalm_superscription_is_unwrapped() -> None:
     )
 
 
+def test_single_angle_superscription_is_unwrapped() -> None:
+    # The NRSV export wraps Psalm titles in single angle brackets, and one of
+    # them quotes speech, so the body carries double quotes of its own.
+    line = (
+        '<To the leader. A Maskil of David, when Doeg the Edomite came to '
+        'Saul and said to him, "David has come to the house of Ahimelech.">'
+        " Why do you boast, O mighty one?"
+    )
+    assert strip_markup(line) == (
+        "To the leader. A Maskil of David, when Doeg the Edomite came to "
+        'Saul and said to him, "David has come to the house of Ahimelech." '
+        "Why do you boast, O mighty one?"
+    )
+
+
+def test_formatting_tags_are_dropped_and_their_words_kept() -> None:
+    # The Clementine Vulgate marks the Hebrew alphabet of Psalm 118 with an
+    # <i> whose closing tag is malformed ("< i>" for "</i>").
+    line = "<i>Beth< i> In quo corrigit adolescentior viam suam?"
+    assert strip_markup(line) == "Beth In quo corrigit adolescentior viam suam?"
+    # A <link> is closed by the generic "</>".
+    assert strip_markup('See <link b="Gen 1:1">1:1</> here.') == "See 1:1 here."
+
+
+def test_html_style_note_anchors_are_dropped() -> None:
+    # NETS carries HTML anchors for its footnotes, sometimes mid-word and
+    # sometimes with the opening <sup> lost, leaving the anchor letter behind.
+    line = (
+        'there are ephoud, theraphin<a id="pg231en_b"></a>, a carved '
+        'object<a id="pg231en_c"></a> and a cast object'
+    )
+    assert strip_markup(line) == (
+        "there are ephoud, theraphin, a carved object and a cast object"
+    )
+
+
+def test_tag_between_two_words_leaves_a_space() -> None:
+    # Welding the words together would hide both from the search index.
+    assert strip_markup("c</a></sup>these shall be") == "c these shall be"
+    assert strip_markup("31.9<br/>follows 24.34") == "31.9 follows 24.34"
+
+
+def test_doubled_brackets_become_literal_brackets() -> None:
+    # "[[" and "]]" escape a literal bracket; Brenton and the ESV use them to
+    # fence passages of doubtful authenticity, sometimes across verses.
+    assert strip_markup("[[Jews]] and [supplied] words") == "[Jews] and supplied words"
+    assert strip_markup("[[Now when he rose early") == "[Now when he rose early"
+
+
+def test_small_caps_backslashes_are_dropped() -> None:
+    assert strip_markup(r"And the \LORD\ said") == "And the LORD said"
+
+
+def test_strongs_number_with_homograph_letter() -> None:
+    assert strip_markup("was <07363b> moving") == "was moving"
+
+
 def test_stray_trailing_brace_is_dropped() -> None:
     # The NABRE export ends some lines with an unmatched closing brace.
     line = 'How can you say to me, "Flee like a bird to the mountains! }'
@@ -68,6 +125,14 @@ def test_unrecognized_markup_is_kept_and_detected() -> None:
     assert stripped == "And God <weird> said."
     assert has_markup_residue(stripped)
     assert not has_markup_residue("And God said.")
+
+
+def test_unrecognized_tag_is_not_unwrapped_into_its_attributes() -> None:
+    # A tag outside the known vocabulary must not be mistaken for a
+    # superscription, which would spill its attributes into the verse text.
+    line = 'x <span class="q">y</span> z'
+    assert strip_markup(line) == line
+    assert has_markup_residue(strip_markup(line))
 
 
 def _build(tmp_path: Path, line: str, **kwargs: bool) -> tuple[Path, object]:

@@ -62,12 +62,19 @@ By default, `build` strips the recognized markup so the stored text — and ther
 | ------ | ------- | -------- |
 | Footnote block | `{<p><rsup>a</rsup> Pro 8:27-29 }` | Removed (an unterminated block runs to end of line; a stray trailing `}` is also dropped) |
 | Note/cross-reference anchor | `made<N1>`, `<Ra>separated` | Removed |
-| Strong's number | `<0430>` (Hebrew), `<5547>` (Greek) | Removed |
+| Strong's number | `<0430>` (Hebrew), `<5547>` (Greek), `<07363b>` (homograph) | Removed |
 | Tense/voice/mood code | `(08799)` | Removed |
+| Formatting tag | `<i>…</i>`, `<sup>…</sup>`, `<link b="Gen 1:1">…</>`, and the rest of the documented SGML-like vocabulary, plus the HTML-ish `<a id="…">` and `<br/>` some exports emit | Removed — the text they wrap is kept |
 | Translator-supplied italics | `[that]` | Unwrapped — the word is kept |
-| Psalm superscription | `<<A Psalm of David.>>` | Unwrapped — the title text is kept |
+| Literal bracket | `[[Jews]]` | Collapsed to `[Jews]` — the CCAT escape for a bracket that is part of the text, used for passages of doubtful authenticity |
+| Small caps | `\LORD\` | Unwrapped — the word is kept |
+| Psalm superscription | `<<A Psalm of David.>>` (KJV), `<A Psalm of David.>` (NRSV) | Unwrapped — the title text is kept |
+
+A tag between two words leaves a space behind, so that dropping it cannot weld them into a token no search would find (`31.9<br/>follows` → `31.9 follows`).
 
 Stripping is tolerant: only these recognized shapes are removed, and anything else is stored as-is.
+In particular, only the documented tag names are recognized: an unknown tag such as `<span class="q">` is left in place and reported rather than unwrapped into its attributes.
+One documented notation is deliberately not handled — the two-digit codes for special Greek manuscript characters, which are bare digits inside Greek text and so cannot be told from ordinary digits.
 A verse that still contains markup-like characters (`<`, `>`, `{`, `}`) after stripping is counted and reported as a warning, so a new source file's unrecognized quirks surface at build time instead of as silent search misses.
 The note and cross-reference *content* is currently discarded, not stored; since the database is cheap to regenerate from the `.cat` file, nothing is lost if a future version learns to store it.
 
