@@ -69,9 +69,10 @@ Each Bible is a single SQLite database (`database.py`) with three tables:
 
 2. **verses_fts**: an FTS5 external-content virtual table over `verses.text`.
    - `content='verses'`, `content_rowid='verse_key'`.
-   - Built once after a bulk insert with `INSERT INTO verses_fts(verses_fts) VALUES('rebuild')` — there are no sync triggers because a build is one-shot.
+   - Filled once after a bulk insert by `Database.rebuild_fts` — there are no sync triggers because a build is one-shot.
+   - The index holds each verse with its Greek folded (`greek.fold_greek`: diacritics dropped, final sigma normalized), because the FTS5 tokenizer leaves polytonic Greek as written; so the rows are inserted explicitly rather than with FTS5's own `'rebuild'`, which would index the text as stored. A build records this as the `search_folding` metadata key (`greek`), and `search_verses` folds its query only when the key is present, so a database indexed as written is still searched as written.
 
-3. **metadata**: key-value pairs (`format`, `title`, `versification`, `source`, `verse_count`, `notes_count`, `built_at`, `schema_version`).
+3. **metadata**: key-value pairs (`format`, `title`, `versification`, `source`, `verse_count`, `notes_count`, `search_folding`, `built_at`, `schema_version`).
 
 A fourth table, **notes** (`verse_key`, `label`, `text`; schema 2.1), holds the translator's notes extracted from the footnote blocks, in source order within a verse.
 It is not full-text indexed.
@@ -141,6 +142,8 @@ Every feature build also writes a `<feature>_count` metadata key, always, zero i
 
 - `models.py`: `Verse`, `Note`, and `BuildStats` data classes.
 - `ccat_markup.py`: `strip_markup` removes recognized BibleWorks/CCAT markup (footnote blocks, note anchors, Strong's numbers, tense/voice/mood codes, and SGML-like formatting tags; italics brackets, small caps, and Psalm superscriptions are unwrapped, keeping their words; small caps are matched only where the backslashes hug whole words, so the grave accents of Beta Code Greek, as in the Rahlfs LXX, are left alone); `extract_markup` is the same operation returning an `ExtractedMarkup`: the clean text plus the footnote block's translator's notes (`<nsup>`) and cross-references (`<rsup>`), the note anchors, and the Strong's numbers as `StrongsTag`s with word spans into the clean text (each number is swapped for a mark that rides through the stripping, so the offsets are read off the finished text); `strip_markup` is a thin wrapper over it. `has_markup_residue` flags leftover markup-like characters. Stripping is tolerant — unrecognized markup is kept and tallied (`BuildStats.suspect_markup`), never fatal. Only the documented tag names are recognized, so an unknown tag is reported rather than unwrapped into its attributes; the one deliberate gap is the two-digit special-Greek-character codes, which are bare digits inside Greek text. Named for the input format because other formats may be supported later.
+- `beta_code.py`: `beta_to_unicode` converts Beta Code Greek to Unicode (NFC) — a regex finds each letter with its marks and Unicode normalization composes them, so there is no table of combinations. Both capital conventions are accepted (BibleWorks `A)`, TLG `*)a`); marks that cannot sit on the preceding letter are kept as punctuation. Selected by the special `encoding` value `beta-code` (`is_beta_code`), which the builder handles itself: the file is read as UTF-8 and only each line's text is converted, after markup stripping, never its leading reference.
+- `greek.py`: `fold_greek`, the search folding shared by the index build and the query.
 - `database.py`: schema and the `Database` wrapper (insert, rebuild FTS, range and FTS queries, notes, counts); `validate_schema`, `require_feature`, `PRODUCT_NAME`, `IncompatibleDatabaseError`.
 - `builder.py`: `build_database` — parse each `.cat` line's leading `Abbrev C:V` with `RefParser`, compute keys, strip markup and extract notes (unless `keep_markup=True`), skip-and-tally, write the DB. `chapter_letters=True` overlays the NABRE Esther letters onto the book style.
 - `reader.py`: `show_verses` (`notes=True` fills in `Verse.notes`), `search_verses`, and the `format_verse`/`format_note` plain-text formatters. A note line keeps the two-field contract by folding its label into the first field (`Gen 1:7 note 1<TAB>…`).
@@ -159,6 +162,7 @@ Recognized CCAT/BibleWorks markup — `{...}` footnote blocks (terminated, unter
 Dropping a tag that sits between two words leaves a space so they stay separately searchable.
 The translator's notes of the footnote blocks are stored in the `notes` table; the cross-references and Strong's numbers are extracted by `extract_markup` but not yet stored — putting them into structured tables (cross-references as verse-key ranges, Strong's numbers per verse; issues #3 and #4) is future work, each an additive schema-minor bump.
 The sample CEI 2008 file is `cp1252`, not UTF-8, so `build` accepts `--encoding`.
+The Rahlfs LXX is Beta Code Greek; `--encoding beta-code` converts it to Unicode.
 
 Sample `.cat` Bibles live in `reference/samples/` (gitignored): a Brenton LXX (Old Testament and Apocrypha, **no New Testament**), a KJV (Strong's numbers kept as plain text), and an Italian CEI 2008.
 

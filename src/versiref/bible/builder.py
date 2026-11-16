@@ -5,8 +5,9 @@ from pathlib import Path
 
 from versiref import RefParser, RefStyle, Versification
 
+from .beta_code import beta_to_unicode, is_beta_code
 from .ccat_markup import extract_markup, has_markup_residue
-from .database import PRODUCT_NAME, SCHEMA_VERSION, Database
+from .database import PRODUCT_NAME, SCHEMA_VERSION, SEARCH_FOLDING, Database
 from .models import BuildStats, Note, Verse
 
 # Bundled style that defines the NABRE's Esther chapter letters (ESG A–F). When
@@ -90,7 +91,9 @@ def build_database(
         book_style: Named reference style whose recognized names map the
             file's book abbreviations (default ``en-bibleworks``).
         encoding: Text encoding of the input file (e.g., ``cp1252``;
-            default ``utf-8``).
+            default ``utf-8``), or ``beta-code`` for a Greek text in Beta
+            Code, whose verse text is converted to Unicode (see
+            :mod:`versiref.bible.beta_code`).
         keep_markup: Store verse text verbatim instead of stripping
             recognized markup (default ``False``).
         chapter_letters: Overlay the NABRE Esther chapter letters (ESG A–F,
@@ -123,6 +126,12 @@ def build_database(
         style.chapter_letters = RefStyle.named(_CHAPTER_LETTER_STYLE).chapter_letters
     parser = RefParser(style, vers)
     recognized = style.recognized_names
+
+    # Beta Code is ASCII, so the file itself reads as UTF-8; the conversion
+    # applies to each line's text, never to its leading reference.
+    beta_code = is_beta_code(encoding)
+    if beta_code:
+        encoding = "utf-8"
 
     stats = BuildStats()
     verses: dict[int, Verse] = {}
@@ -189,6 +198,11 @@ def build_database(
                 if extracted.notes:
                     notes[key] = extracted.notes
 
+            if beta_code:
+                # After stripping, so that markup is recognized as written
+                # and its tag names are not read as Greek letters.
+                text = beta_to_unicode(text)
+
             verses[key] = Verse(
                 key, start.book, start.chapter, start.verse, text, start.subverse
             )
@@ -209,6 +223,9 @@ def build_database(
         db.set_metadata("versification", versification)
         db.set_metadata("source", input_path.name)
         db.set_metadata("verse_count", str(stats.stored))
+        # Tells a search to fold its query the way rebuild_fts folded the
+        # index; a database without the key was indexed as written.
+        db.set_metadata("search_folding", SEARCH_FOLDING)
         # Always written, zero included: the key's presence says the database
         # has the feature, its value whether this Bible has any such data.
         db.set_metadata("notes_count", str(stats.notes))

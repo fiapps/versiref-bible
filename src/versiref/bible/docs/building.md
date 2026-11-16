@@ -131,6 +131,40 @@ file is UTF-8; the sample CEI 2008 text, for instance, is `cp1252`:
 versiref-bible build cei_2008.cat -o cei_2008.db --versification cei --encoding cp1252 --title "CEI 2008"
 ```
 
+### Beta Code Greek
+
+Some Greek texts, such as the BibleWorks export of Rahlfs' Septuagint, are written in Beta Code: ASCII letters and marks standing for polytonic Greek (`e)n a)rxh^|` for ἐν ἀρχῇ).
+Give `--encoding beta-code` to store such a text as Unicode Greek:
+
+```sh
+versiref-bible build lxx_rahlfs.cat -o lxx.db --versification lxx --encoding beta-code --title "Septuaginta (Rahlfs)"
+```
+
+```text
+Gen 1:1	ἐν ἀρχῇ ἐποίησεν ὁ θεὸς τὸν οὐρανὸν καὶ τὴν γῆν
+```
+
+`beta-code` is handled by versiref-bible itself, not by Python's codecs.
+Only the verse text is converted: the line's leading `Abbrev C:V` is read as written, and markup is stripped first, so a tag's name is not mistaken for Greek letters (with `--keep-markup` the whole text is converted, tags included).
+
+| Beta Code | Meaning |
+| --------- | ------- |
+| `a b g d e z h q i k l m n c o p r s t u f x y w` | α β γ δ ε ζ η θ ι κ λ μ ν ξ ο π ρ σ τ υ φ χ ψ ω (`v` is ϝ; `j` is ς) |
+| `)` `(` | Smooth and rough breathing |
+| `/` `\` `^` or `=` | Acute, grave, and circumflex accent |
+| `+` `\|` | Diaeresis and iota subscript |
+| `A)` or `*)a` | A capital: an uppercase letter with its marks after it (BibleWorks), or an asterisk, the marks, then the letter (TLG) |
+| `'` | Elision, stored as `’` |
+
+A sigma ending its word becomes a final sigma (ς).
+Digits, brackets, and other punctuation are kept, as is a mark that cannot belong to the letter before it (the `)` closing a parenthesis after a consonant).
+A letter's case carries over, so a file in the all-uppercase TLG form, where `A` is a lowercase alpha, is not supported.
+
+Without `--encoding beta-code` a Beta Code file still builds, but its text is stored as the ASCII it is.
+The same conversion is available in Python as `versiref.bible.beta_to_unicode`.
+
+Greek is searched without regard to its diacritics, however it reached the database (see [querying.md](querying.md#searching-greek)).
+
 ## Book-Name Style
 
 `--book-style` names the reference style whose recognized names map the file's abbreviations
@@ -152,7 +186,7 @@ versiref-bible build [OPTIONS] INPUT_FILE
 | `-o`, `--output` | Output database path (required) |
 | `--title` | Human-readable title stored in the database metadata |
 | `--book-style` | Reference style whose names map the file's abbreviations (default: `en-bibleworks`) |
-| `--encoding` | Text encoding of the input file (default: `utf-8`) |
+| `--encoding` | Text encoding of the input file (default: `utf-8`), or `beta-code` for Beta Code Greek |
 | `--keep-markup` | Store verse text verbatim instead of stripping CCAT/BibleWorks markup |
 
 ## Stored Metadata
@@ -165,6 +199,7 @@ versiref-bible build [OPTIONS] INPUT_FILE
 | `versification` | The versification the verse keys were computed against |
 | `source` | The input file name |
 | `verse_count` | Number of verses stored |
+| `search_folding` | `greek`: the full-text index holds Greek without its diacritics, and searches fold their queries to match |
 | `notes_count` | Number of translator's notes stored; always written, so `0` means this Bible has none, and a missing key means the database predates notes and must be rebuilt to use `show --notes` |
 | `built_at` | Local timestamp of the build |
 | `title` | Title, if `--title` was given |

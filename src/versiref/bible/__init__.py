@@ -1,5 +1,6 @@
 """Access Bibles stored in an SQLite database with versiref."""
 
+from versiref.bible.beta_code import beta_to_unicode
 from versiref.bible.builder import build_database
 from versiref.bible.ccat_markup import (
     ExtractedMarkup,
@@ -32,6 +33,7 @@ __all__ = [
     "Note",
     "StrongsTag",
     "Verse",
+    "beta_to_unicode",
     "bible_search_path",
     "build_database",
     "default_data_dir",

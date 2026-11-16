@@ -5,6 +5,7 @@ from collections.abc import Iterable, Sequence
 from pathlib import Path
 from typing import Any
 
+from .greek import fold_greek
 from .models import Note, Verse
 
 # Identifies databases produced by this package, distinguishing them from
@@ -31,6 +32,11 @@ REQUIRED_SCHEMA_VERSION = "2.0"
 FEATURES: dict[str, tuple[str, str, str]] = {
     "notes": ("translator's notes", "2.1", "0.5.0"),
 }
+
+
+# Value of the "search_folding" metadata key: the full-text index holds Greek
+# folded by fold_greek, and a search folds its query to match.
+SEARCH_FOLDING = "greek"
 
 
 class IncompatibleDatabaseError(Exception):
@@ -75,7 +81,9 @@ CREATE TABLE IF NOT EXISTS verses (
 
 CREATE INDEX IF NOT EXISTS idx_verses_bcv ON verses(book_id, chapter, verse);
 
--- FTS5 full-text index over verse text (external content = verses table)
+-- FTS5 full-text index over verse text (external content = verses table).
+-- The index holds the text with its Greek folded (see greek.py), so it is
+-- filled by Database.rebuild_fts rather than by FTS5's own 'rebuild'.
 CREATE VIRTUAL TABLE IF NOT EXISTS verses_fts USING fts5(
     text,
     content='verses',
@@ -312,9 +320,19 @@ class Database:
         return notes
 
     def rebuild_fts(self) -> None:
-        """Rebuild the FTS5 index from the external-content verses table."""
+        """Rebuild the FTS5 index from the external-content verses table.
+
+        The text is indexed with its Greek folded (:func:`fold_greek`), so a
+        search must fold its query likewise; the stored text is untouched.
+        FTS5's own ``'rebuild'`` command would index the text as stored.
+        """
         conn = self._require_conn()
-        conn.execute("INSERT INTO verses_fts(verses_fts) VALUES('rebuild')")
+        conn.create_function("fold_greek", 1, fold_greek, deterministic=True)
+        conn.execute("INSERT INTO verses_fts(verses_fts) VALUES('delete-all')")
+        conn.execute(
+            "INSERT INTO verses_fts(rowid, text)"
+            " SELECT verse_key, fold_greek(text) FROM verses"
+        )
         conn.commit()
 
     def count_verses(self) -> int:

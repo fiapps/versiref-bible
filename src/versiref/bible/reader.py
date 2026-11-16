@@ -6,7 +6,8 @@ from pathlib import Path
 
 from versiref import BibleRef, RefParser, RefStyle, Versification
 
-from .database import Database
+from .database import SEARCH_FOLDING, Database
+from .greek import fold_greek
 from .models import Note, Verse
 
 
@@ -160,6 +161,10 @@ def search_verses(
     with Database(db_path) as db:
         db.validate_schema()
         db_vers = _db_versification(db)
+        if db.get_metadata("search_folding") == SEARCH_FOLDING:
+            # The index holds Greek stripped of its diacritics; a database
+            # built before that was indexed as written, and is searched so.
+            match = fold_greek(match)
         ranges: list[tuple[int, int]] | None = None
         if scope is not None:
             parser = RefParser(RefStyle.named(style_name), db_vers)

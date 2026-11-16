@@ -106,7 +106,8 @@ def _report_build(stats: BuildStats, output: Path) -> None:
     "--encoding",
     default="utf-8",
     show_default=True,
-    help="Text encoding of the input file (e.g., cp1252).",
+    help="Text encoding of the input file (e.g., cp1252), or beta-code for "
+    "Beta Code Greek, which is converted to Unicode.",
 )
 @click.option(
     "--keep-markup",

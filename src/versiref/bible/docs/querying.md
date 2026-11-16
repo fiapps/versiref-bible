@@ -154,6 +154,21 @@ written to stderr:
 … showing 5 of 209 matches (raise --limit to see more)
 ```
 
+### Searching Greek
+
+Greek is matched without regard to breathings, accents, diaereses, iota subscripts, or the form of the sigma, as well as case:
+
+```sh
+versiref-bible search lxx 'θεος'          # finds θεὸς, θεός, Θεός
+versiref-bible search lxx --phrase 'εν αρχη'
+```
+
+A word's accent changes with its place in the sentence (θεός before a pause, θεὸς elsewhere), so matching the accents exactly would miss most occurrences.
+The verses are still printed with their diacritics.
+
+This holds for a database built with versiref-bible 0.5.0 or later, which `info` shows as `search_folding: greek`.
+An older database matches Greek only as it is written; rebuild it to search this way.
+
 ### Ordering
 
 `--order` selects how results are sorted:
