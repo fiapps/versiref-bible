@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Added
+
+- `build --literal-brackets` (Python: `build_database(literal_brackets=True)`, and the same keyword on `extract_markup` and `strip_markup`) keeps square brackets as printed characters instead of reading `[word]` as italics and `[[`/`]]` as escaped brackets. Bracket italics are an option of the BibleWorks compiler, so a text prepared without it — the Nestle-Aland Greek New Testament, the Westminster Hebrew text — can now be built from the export as it stands, without doubling its brackets first. The rest of the markup is still stripped.
+
 ## 0.5.0 - 2026-11-16
 
 ### Added

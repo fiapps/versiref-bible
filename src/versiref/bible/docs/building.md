@@ -65,8 +65,8 @@ By default, `build` strips the recognized markup so the stored text — and ther
 | Strong's number | `<0430>` (Hebrew), `<5547>` (Greek), `<07363b>` (homograph) | Removed |
 | Tense/voice/mood code | `(08799)` | Removed |
 | Formatting tag | `<i>…</i>`, `<sup>…</sup>`, `<link b="Gen 1:1">…</>`, and the rest of the documented SGML-like vocabulary, plus the HTML-ish `<a id="…">` and `<br/>` some exports emit | Removed — the text they wrap is kept |
-| Translator-supplied italics | `[that]` | Unwrapped — the word is kept |
-| Literal bracket | `[[Jews]]` | Collapsed to `[Jews]` — the CCAT escape for a bracket that is part of the text, used for passages of doubtful authenticity |
+| Translator-supplied italics | `[that]` | Unwrapped — the word is kept (unless `--literal-brackets`; see [Printed brackets](#printed-brackets)) |
+| Literal bracket | `[[Jews]]` | Collapsed to `[Jews]` — the CCAT escape for a bracket that is part of the text, used for passages of doubtful authenticity (unless `--literal-brackets`) |
 | Small caps | `\LORD\` | Unwrapped — the word is kept |
 | Psalm superscription | `<<A Psalm of David.>>` (KJV), `<A Psalm of David.>` (NRSV) | Unwrapped — the title text is kept |
 
@@ -79,6 +79,16 @@ A verse that still contains markup-like characters (`<`, `>`, `{`, `}`) after st
 Cross-references and Strong's numbers are currently discarded, not stored; since the database is cheap to regenerate from the `.cat` file, nothing is lost if a future version learns to store them.
 
 Pass `--keep-markup` to skip stripping entirely and store each line's text verbatim.
+
+### Printed Brackets
+
+Reading `[word]` as italics is an option of the BibleWorks compiler, and many texts are prepared without it: their square brackets are printed characters.
+The Nestle-Aland Greek New Testament brackets words of doubtful authenticity (`[καὶ] λέγων`) and double-brackets Mark 16:9-20; the Westminster Hebrew text gives each qere in brackets.
+Stripped as italics, those brackets would be lost, and a verse with two bracketed words could lose the wrong pair.
+
+Pass `--literal-brackets` for such a text.
+Every square bracket is then stored as written — `[word]` is not unwrapped, and `[[` is two brackets, not an escape for one — while the rest of the markup is stripped as usual.
+The option applies to the whole file, notes included, so a text that uses brackets both ways still needs its printed brackets doubled in the source.
 
 ### Translator's Notes
 
@@ -188,6 +198,7 @@ versiref-bible build [OPTIONS] INPUT_FILE
 | `--book-style` | Reference style whose names map the file's abbreviations (default: `en-bibleworks`) |
 | `--encoding` | Text encoding of the input file (default: `utf-8`), or `beta-code` for Beta Code Greek |
 | `--keep-markup` | Store verse text verbatim instead of stripping CCAT/BibleWorks markup |
+| `--literal-brackets` | Keep square brackets as printed characters instead of reading `[word]` as italics and `[[ ]]` as escaped brackets |
 
 ## Stored Metadata
 

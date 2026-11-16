@@ -51,6 +51,7 @@ def build_database(
     book_style: str = "en-bibleworks",
     encoding: str = "utf-8",
     keep_markup: bool = False,
+    literal_brackets: bool = False,
     chapter_letters: bool = False,
 ) -> BuildStats:
     """Build a Bible database from a CCAT-format ``.cat`` file.
@@ -96,6 +97,10 @@ def build_database(
             :mod:`versiref.bible.beta_code`).
         keep_markup: Store verse text verbatim instead of stripping
             recognized markup (default ``False``).
+        literal_brackets: Leave square brackets as written instead of
+            reading ``[word]`` as italics and ``[[``/``]]`` as escapes for a
+            printed bracket, for a text whose brackets are all printed ones;
+            the rest of the markup is still stripped (default ``False``).
         chapter_letters: Overlay the NABRE Esther chapter letters (ESG A–F,
             from the ``en-nabre`` style) onto ``book_style`` so a lettered
             chapter such as ``Est A:1`` parses (default ``False``).
@@ -189,7 +194,7 @@ def build_database(
             # line's notes along with its text.
             notes.pop(key, None)
             if not keep_markup:
-                extracted = extract_markup(text)
+                extracted = extract_markup(text, literal_brackets=literal_brackets)
                 if extracted.text != text:
                     stats.stripped_markup += 1
                     text = extracted.text

@@ -318,3 +318,39 @@ def test_cli_show_notes_interleaves_two_field_lines(tmp_path: Path) -> None:
     # Without the flag the notes stay out of the output.
     result = runner.invoke(main, ["show", str(db_path), "Gen 1:6-7"])
     assert len(result.output.splitlines()) == 2
+
+
+def test_literal_brackets_are_left_as_written() -> None:
+    # A text compiled without bracket italics prints its brackets: NA28's
+    # doubtful words and its double-bracketed passages.
+    line = "[καὶ] λέγων <N1> [[Ἀναστὰς δὲ]] {<p><nsup>1</nsup> Or [so] }"
+    extracted = extract_markup(line, literal_brackets=True)
+    assert extracted.text == "[καὶ] λέγων [[Ἀναστὰς δὲ]]"
+    # The rest of the markup is still stripped, and notes follow suit.
+    assert extracted.notes == (Note("1", "Or [so]"),)
+    assert strip_markup(line, literal_brackets=True) == extracted.text
+    assert strip_markup(line) == "καὶ λέγων [Ἀναστὰς δὲ]"
+
+
+def test_build_literal_brackets(tmp_path: Path) -> None:
+    # Two ketiv/qere pairs in one verse: read as italics, the brackets
+    # between the first qere and the second would be unwrapped.
+    line = "(a) [b] c (d) [e] <N1>"
+    db_path, _ = _build(tmp_path, line, literal_brackets=True)
+    verses, _ = show_verses(db_path, "Gen 1:20")
+    assert verses[0].text == "(a) [b] c (d) [e]"
+    result = CliRunner().invoke(
+        main,
+        [
+            "build",
+            str(tmp_path / "sample.cat"),
+            "-o",
+            str(db_path),
+            "-v",
+            "eng",
+            "--literal-brackets",
+        ],
+    )
+    assert result.exit_code == 0
+    verses, _ = show_verses(db_path, "Gen 1:20")
+    assert verses[0].text == "(a) [b] c (d) [e]"

@@ -116,6 +116,12 @@ def _report_build(stats: BuildStats, output: Path) -> None:
     "markup (footnotes, Strong's numbers, italics brackets).",
 )
 @click.option(
+    "--literal-brackets",
+    is_flag=True,
+    help="Keep square brackets as printed characters instead of reading "
+    "[word] as italics and [[ ]] as escaped brackets.",
+)
+@click.option(
     "--chapter-letters",
     is_flag=True,
     help="Recognize NABRE-style chapter letters for the Additions to Esther "
@@ -129,6 +135,7 @@ def build(
     book_style: str,
     encoding: str,
     keep_markup: bool,
+    literal_brackets: bool,
     chapter_letters: bool,
 ) -> None:
     """Build a Bible database from a CCAT-format text file.
@@ -152,6 +159,7 @@ def build(
             book_style=book_style,
             encoding=encoding,
             keep_markup=keep_markup,
+            literal_brackets=literal_brackets,
             chapter_letters=chapter_letters,
         )
         _report_build(stats, output)

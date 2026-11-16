@@ -18,7 +18,9 @@ markup, all of which get in the way of full-text search and of clean output:
 - ``[word]`` italics marking words supplied by the translator; the word itself
   is part of the translation and is kept. ``[[`` and ``]]`` are the escape for
   a literal bracket (used for passages of doubtful authenticity) and collapse
-  to ``[`` and ``]``.
+  to ``[`` and ``]``. Bracket italics are an option of the BibleWorks
+  compiler, and a text prepared without it uses brackets as printed
+  characters; ``literal_brackets=True`` leaves every bracket as written.
 - ``\Lord\`` small caps for the divine name; the word is kept.
 - ``<<A Psalm of David.>>`` (KJV) and ``<A Psalm of David.>`` (NRSV) Psalm
   superscriptions; the title text is part of the verse and is kept.
@@ -179,7 +181,9 @@ class ExtractedMarkup:
     anchors: tuple[str, ...] = ()
 
 
-def _clean(text: str) -> tuple[str, tuple[StrongsTag, ...]]:
+def _clean(
+    text: str, literal_brackets: bool = False
+) -> tuple[str, tuple[StrongsTag, ...]]:
     """Strip inline markup from text holding no footnote block.
 
     Returns the clean text and its Strong's numbers. Each number is swapped
@@ -204,11 +208,12 @@ def _clean(text: str) -> tuple[str, tuple[StrongsTag, ...]]:
     text = _SUPERSCRIPTION.sub(r"\1", text)
     text = _BRACKETED_PROSE.sub(r"\1", text)
     text = _SMALL_CAPS.sub(r"\1", text)
-    for escape, placeholder in _BRACKET_ESCAPES:
-        text = text.replace(escape, placeholder)
-    text = _ITALICS.sub(r"\1", text)
-    for escape, placeholder in _BRACKET_ESCAPES:
-        text = text.replace(placeholder, escape[0])
+    if not literal_brackets:
+        for escape, placeholder in _BRACKET_ESCAPES:
+            text = text.replace(escape, placeholder)
+        text = _ITALICS.sub(r"\1", text)
+        for escape, placeholder in _BRACKET_ESCAPES:
+            text = text.replace(placeholder, escape[0])
 
     strongs: list[StrongsTag] = []
     if tags:
@@ -227,7 +232,7 @@ def _clean(text: str) -> tuple[str, tuple[StrongsTag, ...]]:
     return re.sub(r"\s{2,}", " ", text).strip(), tuple(strongs)
 
 
-def extract_markup(text: str) -> ExtractedMarkup:
+def extract_markup(text: str, *, literal_brackets: bool = False) -> ExtractedMarkup:
     r"""Strip recognized BibleWorks/CCAT markup, returning what it carried.
 
     The clean text is exactly what :func:`strip_markup` returns. Alongside it
@@ -238,6 +243,10 @@ def extract_markup(text: str) -> ExtractedMarkup:
 
     Strong's numbers inside a footnote block belong to the note, not the
     verse, and are dropped with the rest of the note's markup.
+
+    With ``literal_brackets=True`` square brackets are printed characters:
+    ``[word]`` is not unwrapped as italics and ``[[`` is two brackets, not an
+    escape for one. This holds for the note bodies as for the verse text.
     """
     blocks: list[str] = []
 
@@ -248,7 +257,7 @@ def extract_markup(text: str) -> ExtractedMarkup:
     text = _NOTE_BLOCK.sub(take_block, text)
     text = _STRAY_BRACE.sub("", text)
     anchors = tuple(_ANCHOR.findall(text))
-    clean, strongs = _clean(text)
+    clean, strongs = _clean(text, literal_brackets)
 
     notes: list[Note] = []
     cross_references: list[Note] = []
@@ -258,7 +267,7 @@ def extract_markup(text: str) -> ExtractedMarkup:
             if entry is None:
                 continue
             kind, label, body = entry.groups()
-            note = Note(_clean(label)[0], _clean(body)[0])
+            note = Note(_clean(label)[0], _clean(body, literal_brackets)[0])
             (notes if kind == "nsup" else cross_references).append(note)
 
     return ExtractedMarkup(
@@ -270,15 +279,18 @@ def extract_markup(text: str) -> ExtractedMarkup:
     )
 
 
-def strip_markup(text: str) -> str:
+def strip_markup(text: str, *, literal_brackets: bool = False) -> str:
     r"""Return ``text`` with recognized BibleWorks/CCAT markup removed.
 
     Footnote blocks, note anchors, Strong's numbers, tense/voice/mood codes,
     and SGML-like formatting tags are deleted; ``[bracketed]`` italics,
     ``\smallcaps\``, ``<<superscriptions>>``, and the text wrapped by
     formatting tags are kept. Unrecognized markup is left untouched.
+
+    With ``literal_brackets=True`` square brackets are left as written
+    instead of being read as italics and bracket escapes.
     """
-    return extract_markup(text).text
+    return extract_markup(text, literal_brackets=literal_brackets).text
 
 
 def has_markup_residue(text: str) -> bool:
