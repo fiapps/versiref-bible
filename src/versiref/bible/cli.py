@@ -100,7 +100,8 @@ def _report_build(stats: BuildStats, output: Path) -> None:
     "--book-style",
     default="en-bibleworks",
     show_default=True,
-    help="Reference style whose names map the file's book abbreviations.",
+    help="Reference style whose names map the file's book abbreviations: a "
+    "named style, or the path of a style file (*.json).",
 )
 @click.option(
     "--encoding",

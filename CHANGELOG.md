@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `build --book-style` accepts the path of a versiref style file as well as a style's name (Python: `build_database(book_style=...)` takes a `Path`, or a string ending in `.json` or containing a path separator). A style file can start from a named style and override or add book names, which routes a source file's abbreviations to the books the versification has: for BibleWorks' Septuagint texts, `Dan` to the Old Greek Daniel and `Jda`/`Jdg` to the two texts of Judges, which were skipped or overwritten before.
 - `build --literal-brackets` (Python: `build_database(literal_brackets=True)`, and the same keyword on `extract_markup` and `strip_markup`) keeps square brackets as printed characters instead of reading `[word]` as italics and `[[`/`]]` as escaped brackets. Bracket italics are an option of the BibleWorks compiler, so a text prepared without it — the Nestle-Aland Greek New Testament, the Westminster Hebrew text — can now be built from the export as it stands, without doubling its brackets first. The rest of the markup is still stripped.
 
 ## 0.5.0 - 2026-11-16

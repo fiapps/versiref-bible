@@ -6,7 +6,13 @@ import pytest
 from click.testing import CliRunner
 
 from versiref import RefStyle
-from versiref.bible import build_database, format_verse, search_verses, show_verses
+from versiref.bible import (
+    Database,
+    build_database,
+    format_verse,
+    search_verses,
+    show_verses,
+)
 from versiref.bible.cli import main
 
 SAMPLE = """\
@@ -287,3 +293,72 @@ def test_subverse_labels_inserted_verses(tmp_path: Path) -> None:
         "Add Esth 4:17a",
         "Add Esth 4:17f",
     ]
+
+
+# Rahlfs gives Daniel and Judges in two texts each, and BibleWorks names the
+# Old Greek Daniel "Dan" and the two Judges "Jda" and "Jdg" — which the
+# en-bibleworks style reads as DAN (not in the lxx versification) and as JDG
+# twice over.
+LXX_VARIANTS_SAMPLE = """\
+Dan 1:1 Old Greek Daniel.
+Dat 1:1 Theodotion Daniel.
+Jda 1:1 Judges, the A text.
+Jdg 1:1 Judges, the B text.
+"""
+
+LXX_STYLE = """\
+{
+  "base": "en-bibleworks",
+  "override_names": {
+    "DAG": "Dan", "DAN": "DanH",
+    "JDB": "Jdg", "JDG": "Jda"
+  }
+}
+"""
+
+
+def test_book_style_file_reroutes_abbreviations(tmp_path: Path) -> None:
+    source = tmp_path / "lxx.cat"
+    source.write_text(LXX_VARIANTS_SAMPLE, encoding="utf-8")
+    db_path = tmp_path / "lxx.db"
+
+    # With the named style, Dan is off-scheme and the Judges texts collide.
+    stats = build_database(source, db_path, versification="lxx")
+    assert stats.stored == 2
+    assert stats.off_scheme_books == {"Dan": 1}
+    assert stats.duplicates == 1
+
+    style_file = tmp_path / "bibleworks-lxx.json"
+    style_file.write_text(LXX_STYLE, encoding="utf-8")
+    # A Path, or a string that looks like one, is a style file.
+    for book_style in (style_file, str(style_file)):
+        stats = build_database(
+            source, db_path, versification="lxx", book_style=book_style
+        )
+        assert stats.stored == 4
+        assert not stats.off_scheme_books
+        assert not stats.duplicates
+    with Database(db_path) as db:
+        books = [v.book_id for v in db.verses_in_ranges([(0, 10**10)])]
+    assert sorted(books) == ["DAG", "DNT", "JDB", "JDG"]
+
+
+def test_cli_book_style_file(tmp_path: Path) -> None:
+    source = tmp_path / "lxx.cat"
+    source.write_text(LXX_VARIANTS_SAMPLE, encoding="utf-8")
+    style_file = tmp_path / "bibleworks-lxx.json"
+    style_file.write_text(LXX_STYLE, encoding="utf-8")
+    db_path = tmp_path / "lxx.db"
+    args = ["build", str(source), "-o", str(db_path), "-v", "lxx", "--book-style"]
+    runner = CliRunner()
+    result = runner.invoke(main, [*args, str(style_file)])
+    assert result.exit_code == 0
+    assert "4 verses" in result.output
+    # A missing or malformed style file is an error, not a traceback.
+    result = runner.invoke(main, [*args, str(tmp_path / "missing.json")])
+    assert result.exit_code == 1
+    assert "Error:" in result.output
+    style_file.write_text("{not json", encoding="utf-8")
+    result = runner.invoke(main, [*args, str(style_file)])
+    assert result.exit_code == 1
+    assert "Error:" in result.output

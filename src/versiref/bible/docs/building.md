@@ -184,6 +184,37 @@ sample `.cat` files. Use a different style if your source file uses different ab
 This style affects only how the *input file's* book names are read; it is independent of the
 `--style` used to label output when you later run `show` or `search`.
 
+### Style Files
+
+`--book-style` also accepts the path of a versiref style file: a value that ends in `.json` or contains a path separator is read as a file, not as a style's name.
+Use one when a source file's abbreviations are almost those of a named style, but some name the wrong book for the versification.
+
+BibleWorks' Septuagint texts are the usual case.
+They call the Old Greek Daniel `Dan` and give Judges in two texts, `Jda` and `Jdg`, while the `lxx` versification files the Old Greek Daniel as `DAG` and the two Judges as `JDG` and `JDB`.
+Read with `en-bibleworks`, `Dan` is skipped as a book not in the versification and one Judges text overwrites the other.
+A style file that starts from `en-bibleworks` and renames those books stores them all:
+
+```json
+{
+  "base": "en-bibleworks",
+  "override_names": {
+    "DAG": "Dan", "DAN": "DanH",
+    "ESG": "Est", "EST": "EstH",
+    "JDB": "Jdg", "JDG": "Jda"
+  }
+}
+```
+
+```sh
+versiref-bible build lxx_rahlfs.cat -o lxx.db --versification lxx --encoding beta-code --book-style bibleworks-lxx.json
+```
+
+`override_names` maps a book ID to the name the file uses for it.
+A name can belong to one book only, so the book that held it must be given another (`DanH` and `EstH` here, which the file never uses); `also_recognize` adds names without displacing any.
+See the versiref documentation (`uv run versiref docs`) for the style file format.
+
+A style maps names, not chapter numbers: a file that numbers a book differently from the versification (Nehemiah as its own book, where `lxx` has it as chapters 11–23 of 2 Esdras) still has to be edited.
+
 ## CLI Options Reference
 
 ```text
@@ -195,7 +226,7 @@ versiref-bible build [OPTIONS] INPUT_FILE
 | `-v`, `--versification` | Named versification of the Bible (required, e.g. `eng`, `lxx`, `cei`) |
 | `-o`, `--output` | Output database path (required) |
 | `--title` | Human-readable title stored in the database metadata |
-| `--book-style` | Reference style whose names map the file's abbreviations (default: `en-bibleworks`) |
+| `--book-style` | Reference style whose names map the file's abbreviations: a named style (default: `en-bibleworks`) or the path of a style file (`*.json`) |
 | `--encoding` | Text encoding of the input file (default: `utf-8`), or `beta-code` for Beta Code Greek |
 | `--keep-markup` | Store verse text verbatim instead of stripping CCAT/BibleWorks markup |
 | `--literal-brackets` | Keep square brackets as printed characters instead of reading `[word]` as italics and `[[ ]]` as escaped brackets |

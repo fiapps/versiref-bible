@@ -27,6 +27,20 @@ _DISABLED_FOLLOWING_VERSE = "\x00f"
 _DISABLED_FOLLOWING_VERSES = "\x00ff"
 
 
+def _load_book_style(book_style: str | Path) -> RefStyle:
+    """Load the style that reads the file's book abbreviations.
+
+    A :class:`~pathlib.Path`, or a string that looks like a path (it ends in
+    ``.json`` or contains a path separator), is a style file; any other
+    string names a bundled style.
+    """
+    if isinstance(book_style, Path):
+        return RefStyle.from_file(str(book_style))
+    if book_style.lower().endswith(".json") or "/" in book_style or "\\" in book_style:
+        return RefStyle.from_file(book_style)
+    return RefStyle.named(book_style)
+
+
 def _split_reference(line: str) -> tuple[str, str, str] | None:
     """Split a CCAT line ``Abbrev C:V text`` into ``(abbrev, reference, text)``.
 
@@ -48,7 +62,7 @@ def build_database(
     *,
     versification: str,
     title: str | None = None,
-    book_style: str = "en-bibleworks",
+    book_style: str | Path = "en-bibleworks",
     encoding: str = "utf-8",
     keep_markup: bool = False,
     literal_brackets: bool = False,
@@ -89,8 +103,12 @@ def build_database(
         output_path: Destination database (overwritten if it exists).
         versification: Named versification for the Bible (e.g. ``eng``).
         title: Human-readable title stored in metadata.
-        book_style: Named reference style whose recognized names map the
-            file's book abbreviations (default ``en-bibleworks``).
+        book_style: Reference style whose recognized names map the file's
+            book abbreviations: a named style (default ``en-bibleworks``) or
+            the path of a versiref style file (a :class:`~pathlib.Path`, or a
+            string ending in ``.json`` or containing a path separator). A
+            style file can start from a named style and override or add
+            names, to route the file's abbreviations to other books.
         encoding: Text encoding of the input file (e.g., ``cp1252``;
             default ``utf-8``), or ``beta-code`` for a Greek text in Beta
             Code, whose verse text is converted to Unicode (see
@@ -119,8 +137,8 @@ def build_database(
         raise ValueError(f"Output path is the input file: {output_path}")
 
     vers = Versification.named(versification)
-    style = RefStyle.named(book_style)
-    # Mutate the freshly loaded style in place (named() returns a new instance
+    style = _load_book_style(book_style)
+    # Mutate the freshly loaded style in place (loading returns a new instance
     # each call, so this affects no one else). See _DISABLED_FOLLOWING_VERSE.
     style.following_verse = _DISABLED_FOLLOWING_VERSE
     style.following_verses = _DISABLED_FOLLOWING_VERSES

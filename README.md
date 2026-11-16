@@ -46,7 +46,7 @@ Options:
 - `-o, --output` (required) — output database path.
 - `--title` — human-readable title stored in the database.
 - `--book-style` — reference style whose names map the file's abbreviations
-  (default `en-bibleworks`).
+  (default `en-bibleworks`), or the path of a style file (`*.json`).
 - `--encoding` — input text encoding (e.g., `cp1252`; default `utf-8`), or `beta-code` to convert Beta Code Greek to Unicode.
 - `--literal-brackets` — keep square brackets as printed characters instead of reading `[word]` as italics.
 
