@@ -174,7 +174,7 @@ This project uses `uv_build` as the build backend (see `pyproject.toml`), config
 
 Key configuration:
 
-- Build backend: `uv_build>=0.9.28,<0.10.0`
+- Build backend: `uv_build>=0.13.5,<0.14.0`
 - Module name: `versiref.bible`
 
 ## Releasing
