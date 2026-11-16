@@ -5,8 +5,8 @@ from pathlib import Path
 
 from versiref import RefParser, RefStyle, Versification
 
-from .database import PRODUCT_NAME, SCHEMA_VERSION, Database
 from .ccat_markup import has_markup_residue, strip_markup
+from .database import PRODUCT_NAME, SCHEMA_VERSION, Database
 from .models import BuildStats, Verse
 
 # Bundled style that defines the NABRE's Esther chapter letters (ESG A–F). When

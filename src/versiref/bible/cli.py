@@ -7,6 +7,7 @@ from importlib.resources import files
 from pathlib import Path
 
 import click
+
 from versiref import RefStyle
 
 from .builder import build_database

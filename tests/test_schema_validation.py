@@ -124,9 +124,8 @@ def test_cli_show_rejects_unmarked_db(bible_db: Path) -> None:
 def test_validate_rejects_non_sqlite_file(tmp_path: Path) -> None:
     junk = tmp_path / "junk.db"
     junk.write_text("not a database")
-    with Database(junk) as db:
-        with pytest.raises(IncompatibleDatabaseError):
-            db.validate_schema()
+    with Database(junk) as db, pytest.raises(IncompatibleDatabaseError):
+        db.validate_schema()
 
 
 def test_cli_rejects_sqlite_without_metadata(tmp_path: Path) -> None:

@@ -46,6 +46,7 @@ import sys
 from pathlib import Path
 
 import yaml
+
 from versiref import RefParser, RefStyle, Sensitivity, Versification
 
 

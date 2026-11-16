@@ -36,7 +36,7 @@ def _parse_schema_version(value: str) -> tuple[int, int]:
     try:
         return int(parts[0]), int(parts[1])
     except ValueError:
-        raise ValueError("major and minor must be integers")
+        raise ValueError("major and minor must be integers") from None
 
 
 SCHEMA_SQL = """
@@ -192,7 +192,7 @@ class Database:
         except ValueError as exc:
             raise IncompatibleDatabaseError(
                 f"{self.db_path}: unparseable schema_version '{version}': {exc}"
-            )
+            ) from exc
 
         req_major, req_minor = _parse_schema_version(SCHEMA_VERSION)
         if db_major != req_major or db_minor < req_minor:

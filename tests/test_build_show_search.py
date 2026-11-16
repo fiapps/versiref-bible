@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 from click.testing import CliRunner
-from versiref import RefStyle
 
+from versiref import RefStyle
 from versiref.bible import build_database, format_verse, search_verses, show_verses
 from versiref.bible.cli import main
 
@@ -62,7 +62,7 @@ def test_show_style_changes_label(bible_db: Path) -> None:
 
 
 def test_show_unknown_reference_errors(bible_db: Path) -> None:
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="Could not parse reference"):
         show_verses(bible_db, "not a reference")
 
 
@@ -100,7 +100,7 @@ def test_search_relevance_order(bible_db: Path) -> None:
 
 
 def test_search_invalid_order_rejected(bible_db: Path) -> None:
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="Invalid order"):
         search_verses(bible_db, "God", order="bogus")
 
 
@@ -208,9 +208,9 @@ def test_search_phrase_matches_text_as_written(tmp_path: Path) -> None:
 
 
 def test_search_requires_exactly_one_of_query_and_phrase(bible_db: Path) -> None:
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="Exactly one of"):
         search_verses(bible_db)
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="Exactly one of"):
         search_verses(bible_db, "God", phrase="God")
 
 
