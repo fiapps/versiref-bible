@@ -1,4 +1,4 @@
-r"""Strip BibleWorks-style CCAT markup from verse text.
+r"""Strip and extract BibleWorks-style CCAT markup from verse text.
 
 BibleWorks exports decorate the plain verse text with several kinds of inline
 markup, all of which get in the way of full-text search and of clean output:
@@ -26,12 +26,20 @@ markup, all of which get in the way of full-text search and of clean output:
 Stripping is pattern-based and tolerant: only recognized markup is removed,
 and anything unrecognized is left in the text (see :func:`has_markup_residue`).
 
+:func:`extract_markup` returns the clean text together with the content the
+markup carried: the translator's notes and cross-references of the footnote
+blocks, the Strong's numbers with the words they tag, and the note anchors.
+:func:`strip_markup` is the same operation keeping only the clean text.
+
 One documented notation is deliberately not handled: the two-digit codes for
 special Greek manuscript characters, which are bare digits inside Greek text
 and so indistinguishable from ordinary digits without knowing the font.
 """
 
 import re
+from dataclasses import dataclass
+
+from .models import Note
 
 # The documented SGML-like formatting tags, plus the note/cross-reference
 # tags of the BibleWorks example (<nsup>, <rsup>) and the HTML-ish tags real
@@ -43,16 +51,26 @@ _BREAK_NAMES = "p|br"
 # Tag attributes, e.g. the b="Gen 1:1" of a <link> or the id of an <a>.
 _ATTRS = r'(?:\s+[A-Za-z][\w:.-]*\s*=\s*"[^"<>]*")*'
 
-# A footnote block, terminated by "}" or by the end of the line.
-_NOTE_BLOCK = re.compile(r"\s*\{.*?(?:\}|$)")
+# A footnote block, terminated by "}" or by the end of the line. The group is
+# the block's content.
+_NOTE_BLOCK = re.compile(r"\s*\{(.*?)(?:\}|$)")
+# The paragraph tag that starts each note of a footnote block.
+_NOTE_BREAK = re.compile(r"<\s*p\s*>")
+# One note of a footnote block: its kind (<nsup> for a translator's note,
+# <rsup> for a cross-reference), its label, and its body.
+_NOTE_ENTRY = re.compile(r"\s*<(nsup|rsup)>(.*?)</\1>(.*)", re.DOTALL)
 # A stray closing brace at the end of a line whose opening brace is missing.
 _STRAY_BRACE = re.compile(r"\s*\}\s*$")
 # A Strong's number, with the whitespace separating it from the word it tags.
-_STRONGS = re.compile(r"\s*<0?\d{1,5}[a-z]?>")
+_STRONGS = re.compile(r"\s*<(0?\d{1,5})([a-z]?)>")
+# Stands in for a Strong's number while the rest of the markup is stripped, so
+# that the number's position can be read off the finished text.
+_STRONGS_MARK = "\x02"
 # A tense/voice/mood code, likewise with its leading whitespace.
 _TVM_CODE = re.compile(r"\s*\(\d{4,5}\)")
 # A footnote (<N1>) or cross-reference (<Ra>) anchor.
 _NOTE_MARKER = r"<(?:N\d{1,3}|R[a-z]{1,3})>"
+_ANCHOR = re.compile(r"<(N\d{1,3}|R[a-z]{1,3})>")
 # Any closing tag, including the generic "</>" that closes a <link>.
 _CLOSE_TAG = rf"<\s*/\s*(?:{_FORMAT_NAMES}|{_BREAK_NAMES})?\s*>"
 # An opening or self-closing line-break tag.
@@ -107,17 +125,76 @@ def _drop_tags(match: re.Match[str]) -> str:
     return " " if before.isalnum() and after.isalnum() else ""
 
 
-def strip_markup(text: str) -> str:
-    r"""Return ``text`` with recognized BibleWorks/CCAT markup removed.
+@dataclass(frozen=True)
+class StrongsTag:
+    """A Strong's number and the words of the clean text it tags.
 
-    Footnote blocks, note anchors, Strong's numbers, tense/voice/mood codes,
-    and SGML-like formatting tags are deleted; ``[bracketed]`` italics,
-    ``\smallcaps\``, ``<<superscriptions>>``, and the text wrapped by
-    formatting tags are kept. Unrecognized markup is left untouched.
+    The words are a span of ``text.split()``, running from the previous tag
+    (or the start of the verse) to this one. The span is empty
+    (``word_end == word_start``) when the tag follows another directly, as the
+    untranslated ``<0853>`` does in the KJV's Gen 1:4.
+
+    Attributes:
+        lang: ``"H"`` for a Hebrew number (written with a leading zero) or
+            ``"G"`` for a Greek one.
+        number: The Strong's number.
+        suffix: The letter distinguishing a homograph, or ``""``.
+        word_start: Index of the first tagged word (0-based).
+        word_end: Index after the last tagged word.
+
     """
-    text = _NOTE_BLOCK.sub("", text)
-    text = _STRAY_BRACE.sub("", text)
-    text = _STRONGS.sub("", text)
+
+    lang: str
+    number: int
+    suffix: str
+    word_start: int
+    word_end: int
+
+
+@dataclass(frozen=True)
+class ExtractedMarkup:
+    """The clean text of a verse and the content its markup carried.
+
+    Anchors and notes need not pair up: a verse can carry one ``<N1>`` anchor
+    and four numbered notes (KJV Gen 1:20), so neither is derived from the
+    other.
+
+    Attributes:
+        text: The verse text with recognized markup removed, as
+            :func:`strip_markup` returns it.
+        notes: Translator's notes (``<nsup>``) in block order, their bodies
+            stripped of markup like the verse text.
+        cross_references: Cross-references (``<rsup>``) in block order; each
+            body is a reference list, stripped of markup but not parsed.
+        strongs: Strong's numbers of the verse text in order of occurrence.
+        anchors: Labels of the note (``N1``) and cross-reference (``Ra``)
+            anchors found in the verse text, in order.
+
+    """
+
+    text: str
+    notes: tuple[Note, ...] = ()
+    cross_references: tuple[Note, ...] = ()
+    strongs: tuple[StrongsTag, ...] = ()
+    anchors: tuple[str, ...] = ()
+
+
+def _clean(text: str) -> tuple[str, tuple[StrongsTag, ...]]:
+    """Strip inline markup from text holding no footnote block.
+
+    Returns the clean text and its Strong's numbers. Each number is swapped
+    for a mark that rides through the rest of the stripping, because the word
+    offsets only mean something against the finished text: unwrapping and tag
+    removal shift positions.
+    """
+    tags: list[tuple[str, str]] = []
+
+    def mark(match: re.Match[str]) -> str:
+        tags.append((match.group(1), match.group(2)))
+        return _STRONGS_MARK
+
+    text = text.replace(_STRONGS_MARK, "")
+    text = _STRONGS.sub(mark, text)
     text = _TVM_CODE.sub("", text)
     text = _TAG_RUN.sub(_drop_tags, text)
     # After the inner tags are gone: KJV superscriptions contain Strong's
@@ -132,7 +209,76 @@ def strip_markup(text: str) -> str:
     text = _ITALICS.sub(r"\1", text)
     for escape, placeholder in _BRACKET_ESCAPES:
         text = text.replace(placeholder, escape[0])
-    return re.sub(r"\s{2,}", " ", text).strip()
+
+    strongs: list[StrongsTag] = []
+    if tags:
+        # A mark hugs the word it follows, so the words before it — counting
+        # one it interrupts ("light<0216>,") — are the words tagged so far.
+        pieces = text.split(_STRONGS_MARK)
+        prefix = ""
+        word_start = 0
+        for (digits, suffix), piece in zip(tags, pieces, strict=False):
+            prefix += piece
+            word_end = len(prefix.split())
+            lang = "H" if digits.startswith("0") else "G"
+            strongs.append(StrongsTag(lang, int(digits), suffix, word_start, word_end))
+            word_start = word_end
+        text = "".join(pieces)
+    return re.sub(r"\s{2,}", " ", text).strip(), tuple(strongs)
+
+
+def extract_markup(text: str) -> ExtractedMarkup:
+    r"""Strip recognized BibleWorks/CCAT markup, returning what it carried.
+
+    The clean text is exactly what :func:`strip_markup` returns. Alongside it
+    come the translator's notes and cross-references of the ``{...}`` footnote
+    blocks (split at ``<p>``; a piece labelled neither ``<nsup>`` nor
+    ``<rsup>`` is discarded), the Strong's numbers of the verse text with the
+    word spans they tag, and the labels of the note anchors.
+
+    Strong's numbers inside a footnote block belong to the note, not the
+    verse, and are dropped with the rest of the note's markup.
+    """
+    blocks: list[str] = []
+
+    def take_block(match: re.Match[str]) -> str:
+        blocks.append(match.group(1))
+        return ""
+
+    text = _NOTE_BLOCK.sub(take_block, text)
+    text = _STRAY_BRACE.sub("", text)
+    anchors = tuple(_ANCHOR.findall(text))
+    clean, strongs = _clean(text)
+
+    notes: list[Note] = []
+    cross_references: list[Note] = []
+    for block in blocks:
+        for piece in _NOTE_BREAK.split(block):
+            entry = _NOTE_ENTRY.fullmatch(piece)
+            if entry is None:
+                continue
+            kind, label, body = entry.groups()
+            note = Note(_clean(label)[0], _clean(body)[0])
+            (notes if kind == "nsup" else cross_references).append(note)
+
+    return ExtractedMarkup(
+        text=clean,
+        notes=tuple(notes),
+        cross_references=tuple(cross_references),
+        strongs=strongs,
+        anchors=anchors,
+    )
+
+
+def strip_markup(text: str) -> str:
+    r"""Return ``text`` with recognized BibleWorks/CCAT markup removed.
+
+    Footnote blocks, note anchors, Strong's numbers, tense/voice/mood codes,
+    and SGML-like formatting tags are deleted; ``[bracketed]`` italics,
+    ``\smallcaps\``, ``<<superscriptions>>``, and the text wrapped by
+    formatting tags are kept. Unrecognized markup is left untouched.
+    """
+    return extract_markup(text).text
 
 
 def has_markup_residue(text: str) -> bool:

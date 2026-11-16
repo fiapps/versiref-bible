@@ -5,9 +5,9 @@ from pathlib import Path
 
 from versiref import RefParser, RefStyle, Versification
 
-from .ccat_markup import has_markup_residue, strip_markup
+from .ccat_markup import extract_markup, has_markup_residue
 from .database import PRODUCT_NAME, SCHEMA_VERSION, Database
-from .models import BuildStats, Verse
+from .models import BuildStats, Note, Verse
 
 # Bundled style that defines the NABRE's Esther chapter letters (ESG A–F). When
 # ``chapter_letters=True``, the build overlays this style's ``chapter_letters``
@@ -78,6 +78,10 @@ def build_database(
     lines verbatim instead. Stripping is tolerant: unrecognized markup is kept
     and tallied (``BuildStats.suspect_markup``), never fatal.
 
+    The translator's notes of the footnote blocks are stored in the ``notes``
+    table (``BuildStats.notes``) rather than discarded. Extraction is part of
+    stripping, so a ``keep_markup=True`` build stores none.
+
     Args:
         input_path: Source ``.cat`` file.
         output_path: Destination database (overwritten if it exists).
@@ -122,6 +126,7 @@ def build_database(
 
     stats = BuildStats()
     verses: dict[int, Verse] = {}
+    notes: dict[int, tuple[Note, ...]] = {}
 
     with input_path.open(encoding=encoding) as handle:
         for raw in handle:
@@ -167,31 +172,46 @@ def build_database(
                 )
                 continue
 
-            if not keep_markup:
-                cleaned = strip_markup(text)
-                if cleaned != text:
-                    stats.stripped_markup += 1
-                    text = cleaned
-                if has_markup_residue(text):
-                    stats.suspect_markup += 1
-
             key = ranges[0][0]
             if key in verses:
                 stats.duplicates += 1
-            verses[key] = Verse(key, start.book, start.chapter, start.verse, text)
+
+            # Keyed like the verse, so a duplicate line replaces the earlier
+            # line's notes along with its text.
+            notes.pop(key, None)
+            if not keep_markup:
+                extracted = extract_markup(text)
+                if extracted.text != text:
+                    stats.stripped_markup += 1
+                    text = extracted.text
+                if has_markup_residue(text):
+                    stats.suspect_markup += 1
+                if extracted.notes:
+                    notes[key] = extracted.notes
+
+            verses[key] = Verse(
+                key, start.book, start.chapter, start.verse, text, start.subverse
+            )
 
     stats.stored = len(verses)
+    stats.notes = sum(len(verse_notes) for verse_notes in notes.values())
 
     output_path.unlink(missing_ok=True)
     with Database(output_path) as db:
         db.create_schema()
         db.insert_verses(verses.values())
+        db.insert_notes(
+            (key, note) for key, verse_notes in notes.items() for note in verse_notes
+        )
         db.rebuild_fts()
         db.set_metadata("format", PRODUCT_NAME)
         db.set_metadata("schema_version", SCHEMA_VERSION)
         db.set_metadata("versification", versification)
         db.set_metadata("source", input_path.name)
         db.set_metadata("verse_count", str(stats.stored))
+        # Always written, zero included: the key's presence says the database
+        # has the feature, its value whether this Bible has any such data.
+        db.set_metadata("notes_count", str(stats.notes))
         db.set_metadata(
             "built_at", datetime.datetime.now().isoformat(timespec="seconds")
         )

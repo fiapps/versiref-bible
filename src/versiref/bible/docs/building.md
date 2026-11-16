@@ -60,7 +60,7 @@ By default, `build` strips the recognized markup so the stored text — and ther
 
 | Markup | Example | Handling |
 | ------ | ------- | -------- |
-| Footnote block | `{<p><rsup>a</rsup> Pro 8:27-29 }` | Removed (an unterminated block runs to end of line; a stray trailing `}` is also dropped) |
+| Footnote block | `{<p><rsup>a</rsup> Pro 8:27-29 }` | Removed (an unterminated block runs to end of line; a stray trailing `}` is also dropped); its translator's notes are [stored separately](#translators-notes) |
 | Note/cross-reference anchor | `made<N1>`, `<Ra>separated` | Removed |
 | Strong's number | `<0430>` (Hebrew), `<5547>` (Greek), `<07363b>` (homograph) | Removed |
 | Tense/voice/mood code | `(08799)` | Removed |
@@ -76,9 +76,19 @@ Stripping is tolerant: only these recognized shapes are removed, and anything el
 In particular, only the documented tag names are recognized: an unknown tag such as `<span class="q">` is left in place and reported rather than unwrapped into its attributes.
 One documented notation is deliberately not handled — the two-digit codes for special Greek manuscript characters, which are bare digits inside Greek text and so cannot be told from ordinary digits.
 A verse that still contains markup-like characters (`<`, `>`, `{`, `}`) after stripping is counted and reported as a warning, so a new source file's unrecognized quirks surface at build time instead of as silent search misses.
-The note and cross-reference *content* is currently discarded, not stored; since the database is cheap to regenerate from the `.cat` file, nothing is lost if a future version learns to store it.
+Cross-references and Strong's numbers are currently discarded, not stored; since the database is cheap to regenerate from the `.cat` file, nothing is lost if a future version learns to store them.
 
 Pass `--keep-markup` to skip stripping entirely and store each line's text verbatim.
+
+### Translator's Notes
+
+A footnote block holds one note per `<p>`: `<nsup>1</nsup>` labels a translator's note, `<rsup>a</rsup>` a cross-reference.
+The translator's notes are stored in a `notes` table, keyed by verse and kept in the block's order, so that `show --notes` can print them (see [querying.md](querying.md#translators-notes)).
+A note's body is stripped of markup the same way the verse text is, and it stays out of the full-text index: searching verse text does not match note text.
+
+Notes are stored by label, independently of the `<N1>` anchors in the verse text, because the two do not always pair up (the KJV's Gen 1:20 has one anchor and four notes).
+The build summary reports how many notes were extracted.
+Extraction is part of stripping, so a `--keep-markup` build stores no notes.
 
 ## Choosing a Versification
 
@@ -155,6 +165,7 @@ versiref-bible build [OPTIONS] INPUT_FILE
 | `versification` | The versification the verse keys were computed against |
 | `source` | The input file name |
 | `verse_count` | Number of verses stored |
+| `notes_count` | Number of translator's notes stored; always written, so `0` means this Bible has none, and a missing key means the database predates notes and must be rebuilt to use `show --notes` |
 | `built_at` | Local timestamp of the build |
 | `title` | Title, if `--title` was given |
 
@@ -176,3 +187,22 @@ print(stats.stored, stats.unknown_books)
 
 It returns a `BuildStats` describing what was stored and skipped. See its docstring for full
 parameter documentation.
+
+`extract_markup` is the markup handling on its own: given a line's text, it returns an `ExtractedMarkup` holding the clean text (`text`, which is all `strip_markup` returns) and what the markup carried.
+
+```python
+from versiref.bible import extract_markup
+
+extracted = extract_markup(
+    "And God <0430> made<N1> the expanse. "
+    "{<p><rsup>a</rsup> Pro 8:27-29 <p><nsup>1</nsup> Or [fashioned] }"
+)
+extracted.text              # 'And God made the expanse.'
+extracted.notes             # (Note(label='1', text='Or fashioned'),)
+extracted.cross_references  # (Note(label='a', text='Pro 8:27-29'),)
+extracted.anchors           # ('N1',)
+extracted.strongs           # (StrongsTag(lang='H', number=430, suffix='', word_start=0, word_end=2),)
+```
+
+A `StrongsTag` locates the words it tags as a span of `text.split()`, running from the previous tag (or the start of the verse) to this one; the span is empty when a tag directly follows another.
+Only the translator's notes are stored by `build` so far; cross-references and Strong's numbers are returned for callers that want them.

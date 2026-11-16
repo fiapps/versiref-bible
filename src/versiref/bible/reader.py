@@ -1,12 +1,13 @@
 """Query a Bible database: show verses by reference and full-text search."""
 
 import sqlite3
+from dataclasses import replace
 from pathlib import Path
 
 from versiref import BibleRef, RefParser, RefStyle, Versification
 
 from .database import Database
-from .models import Verse
+from .models import Note, Verse
 
 
 def _db_versification(db: Database) -> Versification:
@@ -23,10 +24,30 @@ def format_verse(verse: Verse, style: RefStyle, versification: Versification) ->
     The reference label is formatted with ``style`` under ``versification``;
     verse text is single-line in CCAT, so the tab keeps the line unambiguous.
     """
-    label = BibleRef.for_range(
-        verse.book_id, verse.chapter, verse.verse, versification=versification
+    return f"{_verse_label(verse, style, versification)}\t{verse.text}"
+
+
+def format_note(
+    verse: Verse, note: Note, style: RefStyle, versification: Versification
+) -> str:
+    """Format a verse's note as ``reference note label<TAB>text``.
+
+    The note's label is folded into the first field, so the line keeps the
+    two-field shape of a verse line and still says which verse it belongs to.
+    """
+    label = _verse_label(verse, style, versification)
+    return f"{label} note {note.label}\t{note.text}"
+
+
+def _verse_label(verse: Verse, style: RefStyle, versification: Versification) -> str:
+    """Format a verse's reference with ``style`` under ``versification``."""
+    return BibleRef.for_range(
+        verse.book_id,
+        verse.chapter,
+        verse.verse,
+        start_subverse=verse.subverse,
+        versification=versification,
     ).format(style)
-    return f"{label}\t{verse.text}"
 
 
 def show_verses(
@@ -35,6 +56,7 @@ def show_verses(
     *,
     style_name: str = "en-sbl",
     from_versification: str | None = None,
+    notes: bool = False,
 ) -> tuple[list[Verse], Versification]:
     """Return the verses covered by a Bible reference.
 
@@ -45,6 +67,7 @@ def show_verses(
             output (default ``en-sbl``).
         from_versification: If given, interpret ``reference`` in this
             versification and map it to the database's versification.
+        notes: Fill in each verse's translator's notes (``Verse.notes``).
 
     Returns:
         ``(verses, db_versification)`` — verses in canonical order plus the
@@ -52,10 +75,14 @@ def show_verses(
 
     Raises:
         ValueError: If the reference cannot be parsed.
+        IncompatibleDatabaseError: If ``notes`` is asked of a database built
+            before notes were stored.
 
     """
     with Database(db_path) as db:
         db.validate_schema()
+        if notes:
+            db.require_feature("notes")
         db_vers = _db_versification(db)
         source_vers = (
             Versification.named(from_versification)
@@ -74,7 +101,11 @@ def show_verses(
                     f"the database's versification."
                 )
             ref = mapped
-        verses = db.verses_in_ranges(list(ref.range_keys()))
+        ranges = list(ref.range_keys())
+        verses = db.verses_in_ranges(ranges)
+        if notes:
+            by_key = db.notes_in_ranges(ranges)
+            verses = [replace(v, notes=by_key.get(v.key, ())) for v in verses]
         return verses, db_vers
 
 

@@ -265,3 +265,25 @@ def test_cli_build_warns_when_nothing_is_stored(tmp_path: Path) -> None:
     )
     assert result.exit_code == 0
     assert "no verses were stored" in result.output
+
+
+def test_subverse_labels_inserted_verses(tmp_path: Path) -> None:
+    # The Greek additions to Esther are verses inserted after 4:17, each with
+    # its own key; the stored subverse keeps their labels apart.
+    source = tmp_path / "esther.cat"
+    source.write_text(
+        "Esg 4:17 Mordecai went away.\n"
+        "Esg 4:17a Then he prayed to the Lord.\n"
+        "Esg 4:17f And now, Lord God.\n",
+        encoding="utf-8",
+    )
+    db_path = tmp_path / "esther.db"
+    stats = build_database(source, db_path, versification="lxx")
+    assert stats.stored == 3
+    assert not stats.duplicates
+    lines = _labels(db_path, "Add Esth 4")
+    assert [line.split("\t", 1)[0] for line in lines] == [
+        "Add Esth 4:17",
+        "Add Esth 4:17a",
+        "Add Esth 4:17f",
+    ]

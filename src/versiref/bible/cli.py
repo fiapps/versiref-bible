@@ -13,7 +13,7 @@ from versiref import RefStyle
 from .builder import build_database
 from .database import Database, IncompatibleDatabaseError
 from .models import BuildStats
-from .reader import format_verse, search_verses, show_verses
+from .reader import format_note, format_verse, search_verses, show_verses
 from .resolver import (
     ENV_VAR,
     bible_search_path,
@@ -44,6 +44,8 @@ def _report_build(stats: BuildStats, output: Path) -> None:
         )
     if stats.stripped_markup:
         click.echo(f"  stripped markup from {stats.stripped_markup} verse(s)")
+    if stats.notes:
+        click.echo(f"  extracted {stats.notes} translator's note(s)")
     if stats.suspect_markup:
         click.echo(
             f"  warning: {stats.suspect_markup} verse(s) still contain "
@@ -171,16 +173,23 @@ def build(
     default=None,
     help="Interpret REFERENCE in this versification and map it to the database's.",
 )
+@click.option(
+    "--notes",
+    is_flag=True,
+    help="Print each verse's translator's notes after it.",
+)
 def show(
     database: str,
     reference: str,
     style: str,
     from_versification: str | None,
+    notes: bool,
 ) -> None:
     """Print the verses covered by a Bible REFERENCE, one per line.
 
     DATABASE is a Bible name on the search path (see ``list``) or a path to a
-    ``.db`` file. Each line is ``reference<TAB>text``.
+    ``.db`` file. Each line is ``reference<TAB>text``. With --notes, a verse's
+    translator's notes follow it as ``reference note label<TAB>text``.
     """
     try:
         db_path = resolve_bible(database)
@@ -189,6 +198,7 @@ def show(
             reference,
             style_name=style,
             from_versification=from_versification,
+            notes=notes,
         )
         if not verses:
             click.echo("No verses found.", err=True)
@@ -196,6 +206,8 @@ def show(
         ref_style = RefStyle.named(style)
         for verse in verses:
             click.echo(format_verse(verse, ref_style, db_vers))
+            for note in verse.notes:
+                click.echo(format_note(verse, note, ref_style, db_vers))
     except _READ_ERRORS as exc:
         click.echo(f"Error: {exc}", err=True)
         sys.exit(1)

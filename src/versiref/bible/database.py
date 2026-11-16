@@ -5,7 +5,7 @@ from collections.abc import Iterable, Sequence
 from pathlib import Path
 from typing import Any
 
-from .models import Verse
+from .models import Note, Verse
 
 # Identifies databases produced by this package, distinguishing them from
 # other versiref-ecosystem SQLite files (e.g. versiref-search) that share the
@@ -16,7 +16,21 @@ PRODUCT_NAME = "versiref-bible"
 # Minor bumps are additive (new tables/columns); a major bump signals a
 # breaking change. Code requiring X.Y accepts any database whose major equals
 # X and whose minor is >= Y.
-SCHEMA_VERSION = "2.0"
+#
+# SCHEMA_VERSION is what a build writes. REQUIRED_SCHEMA_VERSION is what the
+# core reads (show, search, info) need, and stays put when a minor bump adds a
+# feature, so that an older database keeps working; the feature's own reads
+# are gated separately (see FEATURES and Database.require_feature).
+#
+# 2.1: verses.subverse; the notes table.
+SCHEMA_VERSION = "2.1"
+REQUIRED_SCHEMA_VERSION = "2.0"
+
+# Feature -> (description, schema version that introduced it, first package
+# version to build it).
+FEATURES: dict[str, tuple[str, str, str]] = {
+    "notes": ("translator's notes", "2.1", "0.5.0"),
+}
 
 
 class IncompatibleDatabaseError(Exception):
@@ -54,7 +68,9 @@ CREATE TABLE IF NOT EXISTS verses (
     book_id   TEXT NOT NULL,
     chapter   INTEGER NOT NULL,
     verse     INTEGER NOT NULL,
-    text      TEXT NOT NULL
+    text      TEXT NOT NULL,
+    -- Letters of an inserted verse (the "a" of ESG 4:17a); '' otherwise.
+    subverse  TEXT NOT NULL DEFAULT ''
 );
 
 CREATE INDEX IF NOT EXISTS idx_verses_bcv ON verses(book_id, chapter, verse);
@@ -65,6 +81,15 @@ CREATE VIRTUAL TABLE IF NOT EXISTS verses_fts USING fts5(
     content='verses',
     content_rowid='verse_key'
 );
+
+-- Translator's notes, in source order within each verse.
+CREATE TABLE IF NOT EXISTS notes (
+    verse_key INTEGER NOT NULL,   -- REFERENCES verses(verse_key)
+    label     TEXT NOT NULL,      -- the note's label in the source, e.g. "1"
+    text      TEXT NOT NULL       -- note body, stripped of markup
+);
+
+CREATE INDEX IF NOT EXISTS idx_notes_verse ON notes(verse_key);
 """
 
 
@@ -155,8 +180,9 @@ class Database:
         versiref-ecosystem database is rejected cleanly rather than failing
         later on a missing table), then the schema version using the additive
         rule: the database's major version must equal this code's major
-        version, and its minor version must be >= this code's minor version
-        (:data:`SCHEMA_VERSION`).
+        version, and its minor version must be >= the minor version the core
+        reads require (:data:`REQUIRED_SCHEMA_VERSION`). A feature added by a
+        later minor version is checked by :meth:`require_feature`.
 
         Raises:
             IncompatibleDatabaseError: If the file is not an SQLite database
@@ -182,24 +208,58 @@ class Database:
                 f"{self.db_path}: database format is '{product}', not '{PRODUCT_NAME}'"
             )
 
+        version, (db_major, db_minor) = self._schema_version()
+        req_major, req_minor = _parse_schema_version(REQUIRED_SCHEMA_VERSION)
+        if db_major != req_major or db_minor < req_minor:
+            raise IncompatibleDatabaseError(
+                f"{self.db_path}: schema version {version} is incompatible with "
+                f"this code (requires {REQUIRED_SCHEMA_VERSION})"
+            )
+
+    def _schema_version(self) -> tuple[str, tuple[int, int]]:
+        """Return the database's schema version, as written and parsed."""
         version = self.get_metadata("schema_version")
         if version is None:
             raise IncompatibleDatabaseError(
                 f"{self.db_path}: missing schema_version metadata"
             )
         try:
-            db_major, db_minor = _parse_schema_version(version)
+            return version, _parse_schema_version(version)
         except ValueError as exc:
             raise IncompatibleDatabaseError(
                 f"{self.db_path}: unparseable schema_version '{version}': {exc}"
             ) from exc
 
-        req_major, req_minor = _parse_schema_version(SCHEMA_VERSION)
-        if db_major != req_major or db_minor < req_minor:
+    def require_feature(self, feature: str) -> None:
+        """Verify this database was built with a feature of :data:`FEATURES`.
+
+        Call after :meth:`validate_schema`, before reading the feature's data.
+
+        Raises:
+            IncompatibleDatabaseError: If the database's schema predates the
+                feature; the message says which package version to rebuild
+                the Bible with.
+
+        """
+        description, schema, package = FEATURES[feature]
+        version, parsed = self._schema_version()
+        if parsed < _parse_schema_version(schema):
             raise IncompatibleDatabaseError(
-                f"{self.db_path}: schema version {version} is incompatible with "
-                f"this code (requires {SCHEMA_VERSION})"
+                f"{self.db_path}: this database was built without {description} "
+                f"(schema version {version}; they need {schema}); rebuild the "
+                f"Bible with versiref-bible >= {package}"
             )
+
+    def _verse_columns(self) -> str:
+        """Return the verse columns to select, aliased ``v``.
+
+        A database built before schema 2.1 has no ``subverse`` column; it
+        reads as empty, which keeps that database's labels as they were.
+        """
+        conn = self._require_conn()
+        columns = {row["name"] for row in conn.execute("PRAGMA table_info(verses)")}
+        subverse = "v.subverse" if "subverse" in columns else "'' AS subverse"
+        return f"v.verse_key, v.book_id, v.chapter, v.verse, v.text, {subverse}"
 
     def insert_verses(self, verses: Iterable[Verse]) -> None:
         """Bulk-insert verses in a single transaction.
@@ -208,11 +268,48 @@ class Database:
         """
         conn = self._require_conn()
         conn.executemany(
-            "INSERT OR REPLACE INTO verses (verse_key, book_id, chapter, verse, text)"
-            " VALUES (?, ?, ?, ?, ?)",
-            [(v.key, v.book_id, v.chapter, v.verse, v.text) for v in verses],
+            "INSERT OR REPLACE INTO verses"
+            " (verse_key, book_id, chapter, verse, text, subverse)"
+            " VALUES (?, ?, ?, ?, ?, ?)",
+            [
+                (v.key, v.book_id, v.chapter, v.verse, v.text, v.subverse)
+                for v in verses
+            ],
         )
         conn.commit()
+
+    def insert_notes(self, notes: Iterable[tuple[int, Note]]) -> None:
+        """Bulk-insert ``(verse_key, note)`` pairs in a single transaction.
+
+        Notes read back in insertion order within a verse.
+        """
+        conn = self._require_conn()
+        conn.executemany(
+            "INSERT INTO notes (verse_key, label, text) VALUES (?, ?, ?)",
+            [(key, note.label, note.text) for key, note in notes],
+        )
+        conn.commit()
+
+    def notes_in_ranges(
+        self, ranges: Sequence[tuple[int, int]]
+    ) -> dict[int, tuple[Note, ...]]:
+        """Return the notes of verses in the given key ranges, by verse key.
+
+        The database must have the ``notes`` feature (see
+        :meth:`require_feature`). A verse with no notes has no entry.
+        """
+        conn = self._require_conn()
+        clause, params = _range_clause(ranges)
+        cursor = conn.execute(
+            f"SELECT verse_key, label, text FROM notes WHERE {clause}"
+            " ORDER BY verse_key, rowid",
+            params,
+        )
+        notes: dict[int, tuple[Note, ...]] = {}
+        for row in cursor.fetchall():
+            key = row["verse_key"]
+            notes[key] = (*notes.get(key, ()), Note(row["label"], row["text"]))
+        return notes
 
     def rebuild_fts(self) -> None:
         """Rebuild the FTS5 index from the external-content verses table."""
@@ -239,7 +336,7 @@ class Database:
         conn = self._require_conn()
         clause, params = _range_clause(ranges)
         cursor = conn.execute(
-            "SELECT verse_key, book_id, chapter, verse, text FROM verses"
+            f"SELECT {self._verse_columns()} FROM verses v"
             f" WHERE {clause} ORDER BY verse_key",
             params,
         )
@@ -272,7 +369,7 @@ class Database:
             )
         conn = self._require_conn()
         sql = [
-            "SELECT v.verse_key, v.book_id, v.chapter, v.verse, v.text",
+            f"SELECT {self._verse_columns()}",
             "FROM verses_fts f JOIN verses v ON v.verse_key = f.rowid",
             "WHERE f.text MATCH ?",
         ]
@@ -313,4 +410,5 @@ def _row_to_verse(row: sqlite3.Row) -> Verse:
         chapter=row["chapter"],
         verse=row["verse"],
         text=row["text"],
+        subverse=row["subverse"],
     )

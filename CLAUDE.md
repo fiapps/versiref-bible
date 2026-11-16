@@ -65,12 +65,16 @@ Each Bible is a single SQLite database (`database.py`) with three tables:
    - `book_id`: Paratext book ID (e.g. `JHN`).
    - `chapter`, `verse`: integers.
    - `text`: the verse text, stored verbatim.
+   - `subverse`: the letters of an inserted verse (`a` in ESG 4:17a), else `''`; used only for the output label (schema 2.1).
 
 2. **verses_fts**: an FTS5 external-content virtual table over `verses.text`.
    - `content='verses'`, `content_rowid='verse_key'`.
    - Built once after a bulk insert with `INSERT INTO verses_fts(verses_fts) VALUES('rebuild')` — there are no sync triggers because a build is one-shot.
 
-3. **metadata**: key-value pairs (`format`, `title`, `versification`, `source`, `verse_count`, `built_at`, `schema_version`).
+3. **metadata**: key-value pairs (`format`, `title`, `versification`, `source`, `verse_count`, `notes_count`, `built_at`, `schema_version`).
+
+A fourth table, **notes** (`verse_key`, `label`, `text`; schema 2.1), holds the translator's notes extracted from the footnote blocks, in source order within a verse.
+It is not full-text indexed.
 
 ### Verse Encoding
 
@@ -124,17 +128,22 @@ A future versiref `BibleRef`-overlap/inclusion feature could let off-scheme vers
 ### Database Identity and Schema Check (`database.py`)
 
 A built Bible carries a `format` metadata marker (`PRODUCT_NAME = "versiref-bible"`) so it can be told apart from other versiref-ecosystem SQLite files (e.g. `versiref-search`) that share the `schema_version` key.
-`Database.validate_schema()` checks the marker first (a foreign or unmarked database — or a file that is not SQLite or has no `metadata` table — is rejected cleanly with `IncompatibleDatabaseError` rather than failing later on a missing table), then applies an additive semver rule on `schema_version`: same major, and minor >= the code's required minor (`SCHEMA_VERSION`).
+`Database.validate_schema()` checks the marker first (a foreign or unmarked database — or a file that is not SQLite or has no `metadata` table — is rejected cleanly with `IncompatibleDatabaseError` rather than failing later on a missing table), then applies an additive semver rule on `schema_version`: same major, and minor >= the minor the core reads require (`REQUIRED_SCHEMA_VERSION`, 2.0).
 Every read path calls it: `show_verses`, `search_verses` (`reader.py`), and `info` (`cli.py`).
 Databases built before the marker existed are unmarked and rejected with a "rebuild the Bible" message — mirroring `versiref-search`'s identical check (its commit `6c58477`).
 
+The version a build *writes* (`SCHEMA_VERSION`, 2.1) is separate from the one the core reads *require*, so an additive minor bump never locks an older database out of `show`/`search`/`info`.
+Each feature a minor bump adds is listed in `FEATURES` and gates only its own reads through `Database.require_feature`, which fails on an older database with a "rebuild the Bible with versiref-bible >= X" message (`show --notes` on a 2.0 build).
+A column a minor bump adds is read tolerantly instead (`Database._verse_columns` selects `''` for a missing `subverse`).
+Every feature build also writes a `<feature>_count` metadata key, always, zero included: present means the database has the feature, `0` that this Bible has no such data, absent that it predates the feature.
+
 ### Source Modules (`src/versiref/bible/`)
 
-- `models.py`: `Verse` and `BuildStats` data classes.
-- `ccat_markup.py`: `strip_markup` removes recognized BibleWorks/CCAT markup (footnote blocks, note anchors, Strong's numbers, tense/voice/mood codes, and SGML-like formatting tags; italics brackets, small caps, and Psalm superscriptions are unwrapped, keeping their words; small caps are matched only where the backslashes hug whole words, so the grave accents of Beta Code Greek, as in the Rahlfs LXX, are left alone); `has_markup_residue` flags leftover markup-like characters. Stripping is tolerant — unrecognized markup is kept and tallied (`BuildStats.suspect_markup`), never fatal. Only the documented tag names are recognized, so an unknown tag is reported rather than unwrapped into its attributes; the one deliberate gap is the two-digit special-Greek-character codes, which are bare digits inside Greek text. Named for the input format because other formats may be supported later.
-- `database.py`: schema and the `Database` wrapper (insert, rebuild FTS, range and FTS queries, counts); `validate_schema`, `PRODUCT_NAME`, `IncompatibleDatabaseError`.
-- `builder.py`: `build_database` — parse each `.cat` line's leading `Abbrev C:V` with `RefParser`, compute keys, strip markup (unless `keep_markup=True`), skip-and-tally, write the DB. `chapter_letters=True` overlays the NABRE Esther letters onto the book style.
-- `reader.py`: `show_verses`, `search_verses`, and the `format_verse` plain-text formatter.
+- `models.py`: `Verse`, `Note`, and `BuildStats` data classes.
+- `ccat_markup.py`: `strip_markup` removes recognized BibleWorks/CCAT markup (footnote blocks, note anchors, Strong's numbers, tense/voice/mood codes, and SGML-like formatting tags; italics brackets, small caps, and Psalm superscriptions are unwrapped, keeping their words; small caps are matched only where the backslashes hug whole words, so the grave accents of Beta Code Greek, as in the Rahlfs LXX, are left alone); `extract_markup` is the same operation returning an `ExtractedMarkup`: the clean text plus the footnote block's translator's notes (`<nsup>`) and cross-references (`<rsup>`), the note anchors, and the Strong's numbers as `StrongsTag`s with word spans into the clean text (each number is swapped for a mark that rides through the stripping, so the offsets are read off the finished text); `strip_markup` is a thin wrapper over it. `has_markup_residue` flags leftover markup-like characters. Stripping is tolerant — unrecognized markup is kept and tallied (`BuildStats.suspect_markup`), never fatal. Only the documented tag names are recognized, so an unknown tag is reported rather than unwrapped into its attributes; the one deliberate gap is the two-digit special-Greek-character codes, which are bare digits inside Greek text. Named for the input format because other formats may be supported later.
+- `database.py`: schema and the `Database` wrapper (insert, rebuild FTS, range and FTS queries, notes, counts); `validate_schema`, `require_feature`, `PRODUCT_NAME`, `IncompatibleDatabaseError`.
+- `builder.py`: `build_database` — parse each `.cat` line's leading `Abbrev C:V` with `RefParser`, compute keys, strip markup and extract notes (unless `keep_markup=True`), skip-and-tally, write the DB. `chapter_letters=True` overlays the NABRE Esther letters onto the book style.
+- `reader.py`: `show_verses` (`notes=True` fills in `Verse.notes`), `search_verses`, and the `format_verse`/`format_note` plain-text formatters. A note line keeps the two-field contract by folding its label into the first field (`Gen 1:7 note 1<TAB>…`).
 - `resolver.py`: resolve a Bible name or path to a `.db` file via `VERSIREF_BIBLE_PATH` (or the per-user `default_data_dir`); `resolve_bible`, `list_bibles`, `bible_search_path`, `BibleNotFoundError`.
 - `cli.py`: Click CLI with the `build`, `show`, `search`, `info`, `list`, and `docs` commands. `show`/`search`/`info` accept a Bible name (resolved via `resolver.py`) or a path. `docs` prints the path to the bundled documentation (resolved with `importlib.resources.files`).
 - `__init__.py`: public API exports.
@@ -148,7 +157,7 @@ The abbreviation is a BibleWorks-style book name (`en-bibleworks`) by default.
 For a file that numbers the Additions to Esther as chapters A–F (as the NABRE prints them), `--chapter-letters` makes `Est A:1` … `Est F:11` parse as `ESG`.
 Recognized CCAT/BibleWorks markup — `{...}` footnote blocks (terminated, unterminated, or a stray trailing `}`), `<N1>`/`<Ra>` note anchors, `<0430>` Strong's numbers, `(08799)` tense/voice/mood codes, SGML-like formatting tags (`<i>`, `<sup>`, `<link b="...">...</>`, plus the HTML-ish `<a id="...">` and `<br/>` real exports carry), `[italics]`, `[[literal brackets]]`, `\small caps\`, and Psalm superscriptions in double (`<<...>>`, KJV) or single (`<...>`, NRSV) angle brackets (all but the first four unwrapped, keeping the words) — is stripped by `ccat_markup.py` before storage so FTS sees clean text; `--keep-markup` stores lines verbatim.
 Dropping a tag that sits between two words leaves a space so they stay separately searchable.
-The footnote/cross-reference *content* is discarded, not stored; extracting it into structured tables (cross-references as verse-key ranges, Strong's numbers per verse) is future work, and would be an additive schema-minor bump.
+The translator's notes of the footnote blocks are stored in the `notes` table; the cross-references and Strong's numbers are extracted by `extract_markup` but not yet stored — putting them into structured tables (cross-references as verse-key ranges, Strong's numbers per verse; issues #3 and #4) is future work, each an additive schema-minor bump.
 The sample CEI 2008 file is `cp1252`, not UTF-8, so `build` accepts `--encoding`.
 
 Sample `.cat` Bibles live in `reference/samples/` (gitignored): a Brenton LXX (Old Testament and Apocrypha, **no New Testament**), a KJV (Strong's numbers kept as plain text), and an Italian CEI 2008.

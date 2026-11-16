@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `show --notes` (Python: `show_verses(..., notes=True)`, `format_note`) prints each verse's translator's notes after it, as `reference note label<TAB>text`. `build` now stores the notes of a CCAT footnote block (`<nsup>` entries) in a `notes` table instead of discarding them, reports how many it extracted, and records the number as the `notes_count` metadata key. The key is always written, so `info` shows whether a database has the feature (`0`: this Bible has no notes; no key: rebuild it). Notes stay out of the full-text index.
+- `extract_markup` (with `ExtractedMarkup`, `StrongsTag`, and `Note`) returns a line's clean text together with what its markup carried: translator's notes, cross-references, note anchors, and Strong's numbers with the words each one tags. `strip_markup` is unchanged and returns the same text. Only the notes are stored so far.
+- An inserted verse keeps its letter in output: the Greek additions to Esther after 4:17 are labelled `Add Esth 4:17a`, `4:17b`, … instead of all appearing as `Add Esth 4:17`. `Verse` gains a `subverse` field.
 - `search --phrase` (`-p`; Python: `search_verses(..., phrase=...)`) searches for text exactly as written, in place of the query. The query is an FTS5 search expression, so ordinary text containing punctuation, such as "so-called" or "Isa 7:14", was refused as invalid syntax; an invalid query's error now points to `--phrase`.
 
 ### Fixed
@@ -20,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Database schema 2.1 adds the `notes` table and a `subverse` column on `verses`. The bump is additive: `show`, `search`, and `info` still read a schema 2.0 database, which keeps its old labels, and only `show --notes` asks for a rebuild.
 - `build` counts an input line whose reference is a range or list (`Gen 1:4-6`) as malformed instead of storing it under its first verse.
 - `build` warns when no verses at all were stored.
 - `search --limit` must be at least 1.

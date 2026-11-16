@@ -14,6 +14,7 @@ from versiref.bible import (
     show_verses,
 )
 from versiref.bible.cli import main
+from versiref.bible.database import SCHEMA_VERSION
 
 SAMPLE = "Joh 3:16 For God so loved the world, that he gave his only begotten Son.\n"
 
@@ -146,3 +147,44 @@ def test_cli_unknown_style_is_reported(bible_db: Path) -> None:
     )
     assert result.exit_code == 1
     assert result.output.startswith("Error:")
+
+
+def _downgrade_to_2_0(db_path: Path) -> None:
+    """Reshape a database into what a pre-0.5.0 build (schema 2.0) wrote."""
+    conn = sqlite3.connect(db_path)
+    conn.executescript(
+        "ALTER TABLE verses DROP COLUMN subverse;"
+        "DROP TABLE notes;"
+        "DELETE FROM metadata WHERE key = 'notes_count';"
+        "UPDATE metadata SET value = '2.0' WHERE key = 'schema_version';"
+    )
+    conn.commit()
+    conn.close()
+
+
+def test_build_writes_current_schema_version(bible_db: Path) -> None:
+    with Database(bible_db) as db:
+        assert db.get_metadata("schema_version") == SCHEMA_VERSION
+        db.require_feature("notes")  # does not raise
+
+
+def test_core_reads_accept_schema_2_0(bible_db: Path) -> None:
+    # A feature's minor bump must not lock older databases out of show/search.
+    _downgrade_to_2_0(bible_db)
+    verses, _ = show_verses(bible_db, "John 3:16")
+    assert [v.subverse for v in verses] == [""]
+    _, total, _ = search_verses(bible_db, "loved")
+    assert total == 1
+    result = CliRunner().invoke(main, ["info", str(bible_db)])
+    assert result.exit_code == 0
+    assert "notes_count" not in result.output
+
+
+def test_notes_on_schema_2_0_says_rebuild(bible_db: Path) -> None:
+    _downgrade_to_2_0(bible_db)
+    with pytest.raises(IncompatibleDatabaseError, match=r"rebuild.*>= 0\.5\.0"):
+        show_verses(bible_db, "John 3:16", notes=True)
+    result = CliRunner().invoke(main, ["show", str(bible_db), "John 3:16", "--notes"])
+    assert result.exit_code == 1
+    assert "translator's notes" in result.output
+    assert "rebuild the Bible" in result.output

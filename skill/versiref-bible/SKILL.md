@@ -53,6 +53,7 @@ The first column is the name you pass to the commands below.
 ```sh
 # Print the verses a reference covers (one per line as `reference<TAB>text`)
 uvx versiref-bible show kjv "John 3:16-18"
+uvx versiref-bible show esv "Gen 1:6-7" --notes          # plus translator's notes
 
 # Full-text search verse text (SQLite FTS5 syntax)
 uvx versiref-bible search kjv '"living water"' --limit 10
@@ -66,6 +67,7 @@ uvx versiref-bible info kjv
 `show` and `search` take `--style` (reference style for input and output labels, default
 `en-sbl`) and, for `show`, `--from-versification` to map a reference in from another scheme.
 Search defaults to canonical verse order; add `--order relevance` for bm25 ranking.
+With `--notes`, each verse's translator's notes follow it as `reference note label<TAB>text` (e.g. `Gen 1:7 note 1<TAB>Or fashioned`); `info` shows a Bible's `notes_count`, and a database that predates notes must be rebuilt to use the flag.
 Punctuation is query syntax in an FTS5 query, so use `--phrase` (in place of the query) for quoted or punctuated text such as a quotation to be located.
 
 ## Working with references directly: the `versiref` CLI

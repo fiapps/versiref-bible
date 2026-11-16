@@ -4,6 +4,20 @@ from dataclasses import dataclass, field
 
 
 @dataclass(frozen=True)
+class Note:
+    """A labelled note attached to a verse.
+
+    Attributes:
+        label: The note's label in the source (e.g. ``1``).
+        text: The note body, stripped of markup.
+
+    """
+
+    label: str
+    text: str
+
+
+@dataclass(frozen=True)
 class Verse:
     """A single Bible verse stored in the database.
 
@@ -15,6 +29,10 @@ class Verse:
         chapter: Chapter number.
         verse: Verse number.
         text: Verse text.
+        subverse: Letters naming an inserted verse (``a`` in Add Esth 4:17a),
+            or ``""`` for an ordinary verse.
+        notes: The verse's translator's notes, filled in only when they are
+            asked for (``show_verses(..., notes=True)``).
 
     """
 
@@ -23,6 +41,8 @@ class Verse:
     chapter: int
     verse: int
     text: str
+    subverse: str = ""
+    notes: tuple[Note, ...] = ()
 
 
 @dataclass
@@ -44,6 +64,7 @@ class BuildStats:
         suspect_markup: Number of stored verses whose text still contains
             markup-like characters after stripping (unrecognized markup,
             kept verbatim).
+        notes: Number of translator's notes extracted and stored.
 
     """
 
@@ -54,3 +75,4 @@ class BuildStats:
     duplicates: int = 0
     stripped_markup: int = 0
     suspect_markup: int = 0
+    notes: int = 0

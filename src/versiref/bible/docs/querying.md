@@ -96,6 +96,27 @@ verses. If the reference cannot be mapped, `show` reports an error.
 If a reference resolves to no stored verses (for example, a New Testament reference against a
 Septuagint database that has no New Testament), `show` prints `No verses found.` on stderr.
 
+### Translator's Notes
+
+`--notes` prints each verse's translator's notes after the verse:
+
+```sh
+versiref-bible show esv "Gen 1:6-7" --notes
+```
+
+```text
+Gen 1:6	And God said, "Let there be an expanse in the midst of the waters, and let it separate the waters from the waters."
+Gen 1:6 note 1	Or a canopy; also verses 7, 8, 14, 15, 17, 20
+Gen 1:7	And God made the expanse and separated the waters that were under the expanse from the waters that were above the expanse. And it was so.
+Gen 1:7 note 1	Or fashioned; also verse 16
+```
+
+A note line has the same two fields as a verse line.
+Its first field is the verse's reference followed by `note` and the note's label, so every line says which verse it belongs to and a note is never mistaken for verse text.
+
+Whether a Bible has notes depends on its source file; `info` reports the number as `notes_count`.
+A database built before versiref-bible 0.5.0 stores no notes: `--notes` reports an error asking you to rebuild it, while plain `show` and `search` keep working.
+
 ## Searching Verse Text
 
 `search` runs a full-text query over verse text. By default results come back in **canonical
@@ -174,7 +195,8 @@ versiref-bible info kjv.db
 ```text
 built_at: 2026-05-31T19:02:18
 format: versiref-bible
-schema_version: 1.0
+notes_count: 7794
+schema_version: 2.1
 source: kjv.cat
 title: King James Version
 verse_count: 31102
@@ -189,6 +211,9 @@ and `schema_version`.
 A file from another versiref tool (for example a `versiref-search` index), or a Bible built
 before this check existed, is rejected with a message telling you to rebuild it, rather than
 failing partway through a query.
+
+The schema version is `major.minor`.
+A minor version adds to the schema without disturbing what was there, so a newer versiref-bible still reads an older database of the same major version; only the feature the minor version added (such as `--notes`, added in 2.1) asks for a rebuild.
 
 ## Listing Available Bibles
 
@@ -277,3 +302,15 @@ results, total, db_vers = search_verses("kjv.db", "light", limit=5, scope="Gen 1
 `show_verses` returns the matching `Verse` objects plus the database's versification (for
 labelling); `search_verses` also returns the total match count before the limit. See their
 docstrings for full parameter documentation.
+
+Pass `notes=True` to `show_verses` to fill in each verse's `notes` (a tuple of `Note(label, text)`); `format_note` formats one as the CLI prints it:
+
+```python
+from versiref.bible import format_note
+
+verses, db_vers = show_verses("esv.db", "Gen 1:6-7", notes=True)
+for verse in verses:
+    print(format_verse(verse, style, db_vers))
+    for note in verse.notes:
+        print(format_note(verse, note, style, db_vers))
+```

@@ -34,7 +34,7 @@ This installs the `versiref-bible` command into the project environment (run it 
 Reads a CCAT-format `.cat` file where each line is `Abbrev C:V text` (the abbreviation is a
 BibleWorks-style book name) and writes an SQLite database. Each verse is stored as one row,
 keyed by an integer verse key computed under the chosen versification, plus an FTS5 index over
-the verse text. CCAT footnotes/formatting are kept as plain text for now.
+the verse text. Recognized CCAT markup is stripped from the text, and translator's notes are stored for `show --notes`.
 
 ```sh
 uv run versiref-bible build BIBLE.cat -o BIBLE.db --versification eng --title "My Bible"
@@ -68,6 +68,7 @@ uv run versiref-bible show kjv "John 3:16-18"     # by name, or a path: kjv.db
 - `--style` — reference style for parsing the input and labelling output (default `en-sbl`).
 - `--from-versification` — interpret the reference in this versification and map it to the
   database's versification.
+- `--notes` — print each verse's translator's notes after it, as `reference note label⇥text`.
 
 The reference is parsed in the style you choose, so use that style's conventions
 (e.g. `--style it-cei` expects `Gen 1,1-3`, not `Gen 1:1-3`).
