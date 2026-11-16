@@ -31,8 +31,9 @@ uv run versiref-bible --help
 
 ```sh
 uv run pytest        # tests live in tests/
-uv run mypy src      # type checking
-uv run ruff check    # linting (ruff pydocstyle rules are enabled)
+uv run mypy src      # type checking (strict mode enabled)
+uv run ruff check    # linting (the rule set matches versiref's)
+uv run ruff format   # code formatting
 ```
 
 ### Dependency auditing
