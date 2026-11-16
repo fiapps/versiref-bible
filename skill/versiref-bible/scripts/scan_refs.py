@@ -104,8 +104,10 @@ def resolve_settings(
         meta = _load_yaml(meta_path)
 
     # Versification: override, else config, else metadata.
-    vers_name = versification_override or config.get("versification") or meta.get(
-        "versification"
+    vers_name = (
+        versification_override
+        or config.get("versification")
+        or meta.get("versification")
     )
     if not vers_name:
         raise ConfigError(
@@ -178,7 +180,9 @@ def main(argv: list[str] | None = None) -> int:
     )
     ap.add_argument("files", nargs="+", type=Path, help="Markdown files to scan.")
     ap.add_argument("-c", "--config", type=Path, help="versiref-search YAML config.")
-    ap.add_argument("-m", "--metadata", type=Path, help="versiref-search YAML metadata.")
+    ap.add_argument(
+        "-m", "--metadata", type=Path, help="versiref-search YAML metadata."
+    )
     ap.add_argument("--style", help="Named reference style (overrides config).")
     ap.add_argument(
         "--versification", help="Versification name (overrides config/metadata)."

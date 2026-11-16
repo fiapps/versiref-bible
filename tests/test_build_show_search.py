@@ -117,9 +117,7 @@ def test_chapter_letters_resolve_to_esg(tmp_path: Path) -> None:
     source = tmp_path / "esther.cat"
     source.write_text(ESTHER_SAMPLE, encoding="utf-8")
     db_path = tmp_path / "esther.db"
-    stats = build_database(
-        source, db_path, versification="nabre", chapter_letters=True
-    )
+    stats = build_database(source, db_path, versification="nabre", chapter_letters=True)
     assert stats.stored == 3
     assert not stats.unknown_books
     assert not stats.off_scheme_books
@@ -192,7 +190,7 @@ def test_following_notation_disabled_keeps_verse_letter_f(tmp_path: Path) -> Non
 def test_search_phrase_matches_text_as_written(tmp_path: Path) -> None:
     source = tmp_path / "s.cat"
     source.write_text(
-        "Gen 1:1 A so-called beginning.\nGen 1:2 He said \"so\" and called.\n",
+        'Gen 1:1 A so-called beginning.\nGen 1:2 He said "so" and called.\n',
         encoding="utf-8",
     )
     db_path = tmp_path / "s.db"
@@ -222,8 +220,13 @@ def test_cli_search_phrase_and_limit(bible_db: Path) -> None:
     assert result.exit_code == 0
     assert result.output.startswith("John 3:16\t")
     assert runner.invoke(main, ["search", str(bible_db)]).exit_code == 1
-    assert runner.invoke(main, ["search", str(bible_db), "God", "-p", "God"]).exit_code == 1
-    assert runner.invoke(main, ["search", str(bible_db), "God", "-n", "0"]).exit_code == 2
+    assert (
+        runner.invoke(main, ["search", str(bible_db), "God", "-p", "God"]).exit_code
+        == 1
+    )
+    assert (
+        runner.invoke(main, ["search", str(bible_db), "God", "-n", "0"]).exit_code == 2
+    )
 
 
 def test_build_refuses_to_overwrite_its_input(tmp_path: Path) -> None:

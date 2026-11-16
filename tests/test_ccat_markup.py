@@ -54,7 +54,7 @@ def test_single_angle_superscription_is_unwrapped() -> None:
     # The NRSV export wraps Psalm titles in single angle brackets, and one of
     # them quotes speech, so the body carries double quotes of its own.
     line = (
-        '<To the leader. A Maskil of David, when Doeg the Edomite came to '
+        "<To the leader. A Maskil of David, when Doeg the Edomite came to "
         'Saul and said to him, "David has come to the house of Ahimelech.">'
         " Why do you boast, O mighty one?"
     )

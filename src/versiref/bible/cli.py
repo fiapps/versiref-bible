@@ -66,9 +66,7 @@ def _report_build(stats: BuildStats, output: Path) -> None:
             err=True,
         )
     if stats.malformed:
-        click.echo(
-            f"  warning: skipped {stats.malformed} malformed line(s)", err=True
-        )
+        click.echo(f"  warning: skipped {stats.malformed} malformed line(s)", err=True)
     if stats.duplicates:
         click.echo(
             f"  warning: {stats.duplicates} duplicate verse key(s) (last kept)",
@@ -323,7 +321,9 @@ def list_command() -> None:
     databases = list_bibles()
     if not databases:
         searched = os.pathsep.join(str(d) for d in path)
-        click.echo(f"No Bible databases found on the search path ({searched}).", err=True)
+        click.echo(
+            f"No Bible databases found on the search path ({searched}).", err=True
+        )
         click.echo(
             f"Set {ENV_VAR} or place .db files in one of those directories.", err=True
         )

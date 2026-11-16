@@ -192,7 +192,9 @@ def build_database(
         db.set_metadata("versification", versification)
         db.set_metadata("source", input_path.name)
         db.set_metadata("verse_count", str(stats.stored))
-        db.set_metadata("built_at", datetime.datetime.now().isoformat(timespec="seconds"))
+        db.set_metadata(
+            "built_at", datetime.datetime.now().isoformat(timespec="seconds")
+        )
         if title is not None:
             db.set_metadata("title", title)
 

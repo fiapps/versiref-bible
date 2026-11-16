@@ -41,9 +41,7 @@ def test_search_path_defaults_to_data_dir(monkeypatch: pytest.MonkeyPatch) -> No
     assert bible_search_path() == [default_data_dir()]
 
 
-def test_search_path_reads_env(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
+def test_search_path_reads_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     a, b = tmp_path / "a", tmp_path / "b"
 
     monkeypatch.setenv(ENV_VAR, os.pathsep.join([str(a), str(b)]))
@@ -117,9 +115,7 @@ def test_list_bibles_skips_missing_dirs(
     assert list_bibles() == []
 
 
-def test_cli_resolves_name(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
+def test_cli_resolves_name(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     _build(tmp_path, "kjv")
     monkeypatch.setenv(ENV_VAR, str(tmp_path))
     result = CliRunner().invoke(main, ["show", "kjv", "John 3:16"])

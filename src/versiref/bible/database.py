@@ -267,7 +267,9 @@ class Database:
 
         """
         if order not in ("canonical", "relevance"):
-            raise ValueError(f"Invalid order {order!r}: use 'canonical' or 'relevance'.")
+            raise ValueError(
+                f"Invalid order {order!r}: use 'canonical' or 'relevance'."
+            )
         conn = self._require_conn()
         sql = [
             "SELECT v.verse_key, v.book_id, v.chapter, v.verse, v.text",

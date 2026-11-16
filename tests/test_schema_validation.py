@@ -51,14 +51,18 @@ def test_build_writes_format_marker(bible_db: Path) -> None:
 
 def test_validate_rejects_unmarked_legacy(bible_db: Path) -> None:
     _del_meta(bible_db, "format")
-    with Database(bible_db) as db, pytest.raises(IncompatibleDatabaseError, match="rebuild"):
+    with (
+        Database(bible_db) as db,
+        pytest.raises(IncompatibleDatabaseError, match="rebuild"),
+    ):
         db.validate_schema()
 
 
 def test_validate_rejects_foreign_product(bible_db: Path) -> None:
     _set_meta(bible_db, "format", "versiref-search")
-    with Database(bible_db) as db, pytest.raises(
-        IncompatibleDatabaseError, match="versiref-search"
+    with (
+        Database(bible_db) as db,
+        pytest.raises(IncompatibleDatabaseError, match="versiref-search"),
     ):
         db.validate_schema()
 
@@ -68,13 +72,19 @@ def test_validate_rejects_incompatible_major(bible_db: Path) -> None:
     # under the current major (2) it is rejected so it gets rebuilt rather than
     # silently returning no matches against 10-digit keys.
     _set_meta(bible_db, "schema_version", "1.0")
-    with Database(bible_db) as db, pytest.raises(IncompatibleDatabaseError, match="incompatible"):
+    with (
+        Database(bible_db) as db,
+        pytest.raises(IncompatibleDatabaseError, match="incompatible"),
+    ):
         db.validate_schema()
 
 
 def test_validate_rejects_unparseable_version(bible_db: Path) -> None:
     _set_meta(bible_db, "schema_version", "abc")
-    with Database(bible_db) as db, pytest.raises(IncompatibleDatabaseError, match="unparseable"):
+    with (
+        Database(bible_db) as db,
+        pytest.raises(IncompatibleDatabaseError, match="unparseable"),
+    ):
         db.validate_schema()
 
 
