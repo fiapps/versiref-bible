@@ -3,7 +3,7 @@
 import sqlite3
 from pathlib import Path
 
-from versiref import RefParser, RefStyle, SimpleBibleRef, Versification
+from versiref import BibleRef, RefParser, RefStyle, Versification
 
 from .database import Database
 from .models import Verse
@@ -23,9 +23,9 @@ def format_verse(verse: Verse, style: RefStyle, versification: Versification) ->
     The reference label is formatted with ``style`` under ``versification``;
     verse text is single-line in CCAT, so the tab keeps the line unambiguous.
     """
-    label = SimpleBibleRef.for_range(
-        verse.book_id, verse.chapter, verse.verse
-    ).format(style, versification)
+    label = BibleRef.for_range(
+        verse.book_id, verse.chapter, verse.verse, versification=versification
+    ).format(style)
     return f"{label}\t{verse.text}"
 
 

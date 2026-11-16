@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = ">=3.10"
 resolution-markers = [
     "python_full_version >= '3.15'",
@@ -72,7 +72,7 @@ name = "exceptiongroup"
 version = "1.3.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "typing-extensions", marker = "python_full_version < '3.13'" },
+    { name = "typing-extensions" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/50/79/66800aadf48771f6b62f7eb014e352e5d06856655206165d775e675a02c9/exceptiongroup-1.3.1.tar.gz", hash = "sha256:8b412432c6055b0b7d14c310000ae93352ed6754f70fa8f7c34141f91c4e3219", size = 30371, upload-time = "2025-11-21T23:01:54.787Z" }
 wheels = [
@@ -403,15 +403,15 @@ wheels = [
 
 [[package]]
 name = "versiref"
-version = "0.10.1"
+version = "0.13.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "click" },
     { name = "pyparsing" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/5c/43/cb7e2d8f21d5813a38958d23cded1df6d11aacc68bdb725e6136b41978b1/versiref-0.10.1.tar.gz", hash = "sha256:bf6251a40fb95115d0c59875bfb35362c134aaf447097822e50baaa51ce1c326", size = 84300, upload-time = "2026-07-25T14:05:32.461Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/e2/3a/458891e5b21fec967d9f55bfe306018aaa9768ece3650482d09d2ff85b7b/versiref-0.13.0.tar.gz", hash = "sha256:29836e25f464080faeadef050051f5ce5a284b533d60656af8de5f190f3beb95", size = 102915, upload-time = "2026-11-16T02:08:24.533Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/80/ea/e87f7dd2db1ab21ecb6ddacbd0fa64abdd80c80e9a9506a670851f480c4c/versiref-0.10.1-py3-none-any.whl", hash = "sha256:e4c9122bcaa26e547e1a0778e646d9a5e138a55426e9b35b3fbf4447a5a6e4b7", size = 109476, upload-time = "2026-07-25T14:05:31.309Z" },
+    { url = "https://files.pythonhosted.org/packages/ba/6c/817a0475850136b222cc35f339486777a5607b58f3a4e5750780b7a99a75/versiref-0.13.0-py3-none-any.whl", hash = "sha256:0317bc1a842263f8837e80dffc2f199c2ac53f66c4f9c021ff6ff36ebb061494", size = 124201, upload-time = "2026-11-16T02:08:23.126Z" },
 ]
 
 [[package]]
@@ -434,7 +434,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "click", specifier = ">=8.1.0" },
-    { name = "versiref", specifier = ">=0.10.1" },
+    { name = "versiref", specifier = ">=0.13.0" },
 ]
 
 [package.metadata.requires-dev]

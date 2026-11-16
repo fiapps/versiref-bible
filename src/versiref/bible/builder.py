@@ -128,12 +128,18 @@ def build_database(
                 continue
             abbrev, reference, text = split
 
-            # parse_simple fails only on grammar (an unrecognized book or a
+            # parse fails only on grammar (an unrecognized book or a
             # malformed chapter/verse), never on a verse number that exceeds the
             # versification's chapter length, so off-scheme verses survive to be
             # gated on range_keys below.
-            ref = parser.parse_simple(reference, silent=True)
-            if ref is None:
+            ref = parser.parse(reference, silent=True)
+            start = ref.ranges[0].start if ref is not None and ref.ranges else None
+            if (
+                ref is None
+                or start is None
+                or start.chapter is None
+                or start.verse is None
+            ):
                 if abbrev in recognized:
                     stats.malformed += 1
                 else:
@@ -142,7 +148,7 @@ def build_database(
 
             # range_keys yields nothing when the book is not in this
             # versification; that is the off-scheme, warn-and-skip case.
-            ranges = list(ref.range_keys(vers))
+            ranges = list(ref.range_keys())
             if not ranges:
                 stats.off_scheme_books[abbrev] = (
                     stats.off_scheme_books.get(abbrev, 0) + 1
@@ -158,12 +164,9 @@ def build_database(
                     stats.suspect_markup += 1
 
             key = ranges[0][0]
-            range_ref = ref.ranges[0]
             if key in verses:
                 stats.duplicates += 1
-            verses[key] = Verse(
-                key, ref.book_id, range_ref.start_chapter, range_ref.start_verse, text
-            )
+            verses[key] = Verse(key, start.book, start.chapter, start.verse, text)
 
     stats.stored = len(verses)
 
