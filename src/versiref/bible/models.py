@@ -36,7 +36,7 @@ class BuildStats:
         off_scheme_books: Abbreviation -> count for books not present in the
             chosen versification (no integer key can be computed).
         malformed: Number of non-blank lines that did not parse as
-            ``Abbrev C:V text``.
+            ``Abbrev C:V text`` naming a single verse.
         duplicates: Number of lines whose verse key collided with an earlier
             line (later line wins).
         stripped_markup: Number of stored verses whose text had recognized

@@ -57,6 +57,7 @@ uvx versiref-bible show kjv "John 3:16-18"
 # Full-text search verse text (SQLite FTS5 syntax)
 uvx versiref-bible search kjv '"living water"' --limit 10
 uvx versiref-bible search kjv "faith" --in "Romans"      # scope to a book/range
+uvx versiref-bible search kjv --phrase "God-ward"        # text as written (no FTS5 syntax)
 
 # Metadata and verse count for one Bible
 uvx versiref-bible info kjv
@@ -65,6 +66,7 @@ uvx versiref-bible info kjv
 `show` and `search` take `--style` (reference style for input and output labels, default
 `en-sbl`) and, for `show`, `--from-versification` to map a reference in from another scheme.
 Search defaults to canonical verse order; add `--order relevance` for bm25 ranking.
+Punctuation is query syntax in an FTS5 query, so use `--phrase` (in place of the query) for quoted or punctuated text such as a quotation to be located.
 
 ## Working with references directly: the `versiref` CLI
 

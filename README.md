@@ -81,6 +81,7 @@ uv run versiref-bible search BIBLE.db "living water" --limit 10
 `QUERY` uses SQLite FTS5 syntax (e.g. `light`, `"living water"`, `love AND world`). Results
 are in canonical verse order by default.
 
+- `-p, --phrase` — literal text to search for instead of `QUERY`, matched as its words in sequence (e.g. `--phrase "God-ward"`, which is not a valid FTS5 query).
 - `-n, --limit` — maximum verses to return (default 20).
 - `--in` — restrict the search to a reference (e.g. `--in "Gen 1"`, `--in "John"`).
 - `--order` — `canonical` (default, verse order) or `relevance` (bm25 ranking).

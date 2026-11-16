@@ -28,9 +28,19 @@ def main() -> None:
     pass
 
 
+# What a read command reports as "Error: ..." instead of a traceback. OSError
+# covers an unknown --style (versiref raises FileNotFoundError for it).
+_READ_ERRORS = (ValueError, LookupError, OSError, IncompatibleDatabaseError)
+
+
 def _report_build(stats: BuildStats, output: Path) -> None:
     """Print a build summary, sending skip warnings to stderr."""
     click.echo(f"✓ Built {output} ({stats.stored} verses)")
+    if not stats.stored:
+        click.echo(
+            "  warning: no verses were stored; check --book-style and --encoding",
+            err=True,
+        )
     if stats.stripped_markup:
         click.echo(f"  stripped markup from {stats.stripped_markup} verse(s)")
     if stats.suspect_markup:
@@ -187,18 +197,25 @@ def show(
         ref_style = RefStyle.named(style)
         for verse in verses:
             click.echo(format_verse(verse, ref_style, db_vers))
-    except (ValueError, LookupError, IncompatibleDatabaseError) as exc:
+    except _READ_ERRORS as exc:
         click.echo(f"Error: {exc}", err=True)
         sys.exit(1)
 
 
 @main.command()
 @click.argument("database")
-@click.argument("query")
+@click.argument("query", required=False)
+@click.option(
+    "-p",
+    "--phrase",
+    default=None,
+    help="Literal text to search for, matched as its words in sequence "
+    "(use instead of QUERY).",
+)
 @click.option(
     "-n",
     "--limit",
-    type=int,
+    type=click.IntRange(min=1),
     default=20,
     show_default=True,
     help="Maximum number of verses to return.",
@@ -224,7 +241,8 @@ def show(
 )
 def search(
     database: str,
-    query: str,
+    query: str | None,
+    phrase: str | None,
     limit: int,
     scope: str | None,
     order: str,
@@ -233,14 +251,25 @@ def search(
     """Full-text search verse text with FTS5 QUERY.
 
     DATABASE is a Bible name on the search path (see ``list``) or a path to a
-    ``.db`` file. QUERY uses SQLite FTS5 syntax (e.g. ``light``,
-    ``"living water"``, ``love AND world``). Output is ``reference<TAB>text``, in
-    canonical verse order by default (use ``--order relevance`` for bm25 ranking).
+    ``.db`` file. QUERY is an SQLite FTS5 search expression (e.g. ``light``,
+    ``"living water"``, ``love AND world``), in which punctuation is query
+    syntax. To search for text as written, e.g. ``--phrase "so-called"``, give
+    --phrase instead of QUERY. Output is ``reference<TAB>text``, in canonical
+    verse order by default (use ``--order relevance`` for bm25 ranking).
     """
+    if (query is None) == (phrase is None):
+        click.echo("Error: give either QUERY or --phrase (not both)", err=True)
+        sys.exit(1)
     try:
         db_path = resolve_bible(database)
         verses, total, db_vers = search_verses(
-            db_path, query, limit=limit, scope=scope, order=order, style_name=style
+            db_path,
+            query,
+            phrase=phrase,
+            limit=limit,
+            scope=scope,
+            order=order,
+            style_name=style,
         )
         if not verses:
             click.echo("No matching verses.", err=True)
@@ -254,7 +283,7 @@ def search(
                 f"(raise --limit to see more)",
                 err=True,
             )
-    except (ValueError, LookupError, IncompatibleDatabaseError) as exc:
+    except _READ_ERRORS as exc:
         click.echo(f"Error: {exc}", err=True)
         sys.exit(1)
 
@@ -276,7 +305,7 @@ def info(database: str) -> None:
         for key, value in metadata.items():
             click.echo(f"{key}: {value}")
         click.echo(f"verses: {count}")
-    except (ValueError, OSError, IncompatibleDatabaseError) as exc:
+    except _READ_ERRORS as exc:
         click.echo(f"Error: {exc}", err=True)
         sys.exit(1)
 

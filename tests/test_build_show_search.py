@@ -3,9 +3,11 @@
 from pathlib import Path
 
 import pytest
+from click.testing import CliRunner
 from versiref import RefStyle
 
 from versiref.bible import build_database, format_verse, search_verses, show_verses
+from versiref.bible.cli import main
 
 SAMPLE = """\
 Gen 1:1 In the beginning God created the heaven and the earth.
@@ -185,3 +187,78 @@ def test_following_notation_disabled_keeps_verse_letter_f(tmp_path: Path) -> Non
         "A lettered addition verse whose letter is f.",
         "The narrative continues after the dream.",
     ]
+
+
+def test_search_phrase_matches_text_as_written(tmp_path: Path) -> None:
+    source = tmp_path / "s.cat"
+    source.write_text(
+        "Gen 1:1 A so-called beginning.\nGen 1:2 He said \"so\" and called.\n",
+        encoding="utf-8",
+    )
+    db_path = tmp_path / "s.db"
+    build_database(source, db_path, versification="eng")
+    # As an FTS5 expression the hyphen is query syntax and is refused, with a
+    # pointer to the phrase search.
+    with pytest.raises(ValueError, match="--phrase"):
+        search_verses(db_path, "so-called")
+    verses, total, _ = search_verses(db_path, phrase="so-called")
+    assert total == 1
+    assert verses[0].verse == 1
+    # A quotation mark in the phrase is literal too.
+    verses, total, _ = search_verses(db_path, phrase='said "so" and')
+    assert [v.verse for v in verses] == [2]
+
+
+def test_search_requires_exactly_one_of_query_and_phrase(bible_db: Path) -> None:
+    with pytest.raises(ValueError):
+        search_verses(bible_db)
+    with pytest.raises(ValueError):
+        search_verses(bible_db, "God", phrase="God")
+
+
+def test_cli_search_phrase_and_limit(bible_db: Path) -> None:
+    runner = CliRunner()
+    result = runner.invoke(main, ["search", str(bible_db), "-p", "so loved"])
+    assert result.exit_code == 0
+    assert result.output.startswith("John 3:16\t")
+    assert runner.invoke(main, ["search", str(bible_db)]).exit_code == 1
+    assert runner.invoke(main, ["search", str(bible_db), "God", "-p", "God"]).exit_code == 1
+    assert runner.invoke(main, ["search", str(bible_db), "God", "-n", "0"]).exit_code == 2
+
+
+def test_build_refuses_to_overwrite_its_input(tmp_path: Path) -> None:
+    source = tmp_path / "sample.cat"
+    source.write_text(SAMPLE, encoding="utf-8")
+    with pytest.raises(ValueError, match="input file"):
+        build_database(source, source, versification="eng")
+    assert source.read_text(encoding="utf-8") == SAMPLE
+
+
+def test_build_ignores_byte_order_mark(tmp_path: Path) -> None:
+    source = tmp_path / "bom.cat"
+    source.write_text("\ufeff" + SAMPLE, encoding="utf-8")
+    db_path = tmp_path / "bom.db"
+    stats = build_database(source, db_path, versification="eng")
+    assert stats.stored == 6
+    assert list(stats.unknown_books) == ["Sip"]
+
+
+def test_build_counts_a_range_line_as_malformed(tmp_path: Path) -> None:
+    source = tmp_path / "r.cat"
+    source.write_text(
+        "Gen 1:1 One verse.\nGen 1:2-3 Two verses.\nGen 1:4,6 A list.\n",
+        encoding="utf-8",
+    )
+    stats = build_database(source, tmp_path / "r.db", versification="eng")
+    assert stats.stored == 1
+    assert stats.malformed == 2
+
+
+def test_cli_build_warns_when_nothing_is_stored(tmp_path: Path) -> None:
+    source = tmp_path / "e.cat"
+    source.write_text("garbage\n", encoding="utf-8")
+    result = CliRunner().invoke(
+        main, ["build", str(source), "-o", str(tmp_path / "e.db"), "-v", "eng"]
+    )
+    assert result.exit_code == 0
+    assert "no verses were stored" in result.output

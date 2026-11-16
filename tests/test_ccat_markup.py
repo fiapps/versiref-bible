@@ -162,3 +162,18 @@ def test_build_keep_markup_stores_verbatim(tmp_path: Path) -> None:
     verses, total, _ = search_verses(db_path, "creeping")
     assert total == 1
     assert "<0430>" in verses[0].text
+
+
+def test_small_caps_keep_a_following_possessive() -> None:
+    assert strip_markup(r"the \LORD\'s anointed") == "the LORD's anointed"
+
+
+def test_beta_code_grave_accents_are_not_small_caps() -> None:
+    # In Beta Code Greek a backslash is the grave accent, following a letter
+    # or another diacritic; it never opens a word as small caps do.
+    for line in (
+        r"e)n a)rxh^| e)poi/hsen o( qeo\s to\n ou)rano\n kai\ th\n gh^n",
+        r"kai\ ei)^den o( qeo\s to\ fw^s o(/ti kalo/n",
+        r"a)\n de\ kai\ o(\s a)\n",
+    ):
+        assert strip_markup(line) == line

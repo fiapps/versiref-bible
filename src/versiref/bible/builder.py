@@ -96,9 +96,15 @@ def build_database(
     Returns:
         A :class:`BuildStats` summary of what was stored and skipped.
 
+    Raises:
+        ValueError: If ``output_path`` is the input file.
+
     """
     input_path = Path(input_path)
     output_path = Path(output_path)
+    if output_path.resolve() == input_path.resolve():
+        # The output is unlinked and rewritten, which would destroy the source.
+        raise ValueError(f"Output path is the input file: {output_path}")
 
     vers = Versification.named(versification)
     style = RefStyle.named(book_style)
@@ -119,7 +125,9 @@ def build_database(
 
     with input_path.open(encoding=encoding) as handle:
         for raw in handle:
-            line = raw.rstrip("\n")
+            # A UTF-8 byte-order mark would otherwise be read as part of the
+            # first line's book abbreviation, dropping that verse.
+            line = raw.rstrip("\n").lstrip("\ufeff")
             if not line.strip():
                 continue
             split = _split_reference(line)
@@ -139,6 +147,10 @@ def build_database(
                 or start is None
                 or start.chapter is None
                 or start.verse is None
+                # A line holds one verse: a range or list ("Gen 1:4-6") is
+                # malformed rather than stored under its first verse.
+                or len(ref.ranges) != 1
+                or ref.ranges[0].end != start
             ):
                 if abbrev in recognized:
                     stats.malformed += 1

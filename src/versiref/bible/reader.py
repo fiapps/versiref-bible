@@ -78,10 +78,20 @@ def show_verses(
         return verses, db_vers
 
 
+def _fts_phrase(text: str) -> str:
+    """Quote text as an FTS5 phrase, so none of it is read as query syntax.
+
+    The phrase matches the words of ``text`` in sequence; punctuation between
+    them is ignored, as it is when the text is indexed.
+    """
+    return '"' + text.replace('"', '""') + '"'
+
+
 def search_verses(
     db_path: str | Path,
-    query: str,
+    query: str | None = None,
     *,
+    phrase: str | None = None,
     limit: int = 20,
     scope: str | None = None,
     order: str = "canonical",
@@ -91,7 +101,12 @@ def search_verses(
 
     Args:
         db_path: Path to the Bible database.
-        query: FTS5 MATCH query.
+        query: FTS5 search expression (punctuation and words such as
+            ``AND``, ``OR``, and ``NOT`` are query syntax); use ``phrase`` for
+            text to be matched as written.
+        phrase: Literal text to search for: matches its words in sequence and
+            reads nothing as query syntax. Exactly one of ``query`` and
+            ``phrase`` must be given.
         limit: Maximum number of verses to return.
         scope: Optional Bible reference restricting the search (parsed in the
             database's versification).
@@ -104,9 +119,13 @@ def search_verses(
         is the match count before ``limit`` was applied.
 
     Raises:
-        ValueError: If the scope reference or the FTS query is invalid.
+        ValueError: If the scope reference or the FTS query is invalid, or if
+            not exactly one of ``query`` and ``phrase`` is given.
 
     """
+    if (query is None) == (phrase is None):
+        raise ValueError("Exactly one of query and phrase must be provided")
+    match = query if query is not None else _fts_phrase(phrase or "")
     with Database(db_path) as db:
         db.validate_schema()
         db_vers = _db_versification(db)
@@ -118,8 +137,11 @@ def search_verses(
                 raise ValueError(f"Could not parse scope reference: {scope!r}")
             ranges = list(scope_ref.range_keys())
         try:
-            results = db.search(query, limit, ranges, order)
-            total = db.count_matches(query, ranges)
+            results = db.search(match, limit, ranges, order)
+            total = db.count_matches(match, ranges)
         except sqlite3.OperationalError as exc:
-            raise ValueError(f"Invalid search query {query!r}: {exc}") from exc
+            raise ValueError(
+                f"Invalid search query {match!r} ({exc}); to search for the "
+                "text as written, use a phrase search (--phrase) instead"
+            ) from exc
         return results, total, db_vers

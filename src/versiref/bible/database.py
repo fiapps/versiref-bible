@@ -159,12 +159,19 @@ class Database:
         (:data:`SCHEMA_VERSION`).
 
         Raises:
-            IncompatibleDatabaseError: If the database lacks the product marker
+            IncompatibleDatabaseError: If the file is not an SQLite database
+                or has no metadata table, lacks the product marker
                 (legacy/unmarked — rebuild to fix), declares a different
                 product, or has an incompatible schema version.
 
         """
-        product = self.get_metadata("format")
+        try:
+            product = self.get_metadata("format")
+        except sqlite3.DatabaseError as exc:
+            # Not an SQLite file at all, or one with no metadata table.
+            raise IncompatibleDatabaseError(
+                f"{self.db_path}: not a versiref-bible database ({exc})"
+            ) from exc
         if product is None:
             raise IncompatibleDatabaseError(
                 f"{self.db_path}: not a versiref-bible database "

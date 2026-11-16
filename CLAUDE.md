@@ -83,26 +83,27 @@ Verse keys are integers of the form `BBCCCVVVSS`:
 Example: John 3:16 in `eng` → `4300301600`.
 
 Keys come from versiref, not from hand-rolled arithmetic (versiref 0.10.0 widened the key from `BBCCCVVV` to `BBCCCVVVSS`; the package treats keys as opaque, so only stored width changed).
-The build side parses each line's leading `Abbrev C:V` with `RefParser.parse_simple`, then calls `range_keys(versification)` on the resulting `SimpleBibleRef`; the show side gets the matching integers from `BibleRef.range_keys()` after parsing a reference.
+Both sides parse with `RefParser.parse` and take the integers from `BibleRef.range_keys()`: the build side from each line's leading `Abbrev C:V`, the show side from the requested reference (versiref 0.13.0 removed `SimpleBibleRef`; a `BibleRef` holds its verse ranges directly).
 Because both use the same versification, the keys line up, which is what makes range lookups correct.
 
 ### Range Lookup
 
-`show` resolves a reference to one `(start_key, end_key)` pair per single-book range (`BibleRef.range_keys()`), then selects `verses` rows with `verse_key BETWEEN start AND end`.
-Each pair stays within one book, so the `BETWEEN` is always safe, including across chapter boundaries.
+`show` resolves a reference to one `(start_key, end_key)` pair per range (`BibleRef.range_keys()`), then selects `verses` rows with `verse_key BETWEEN start AND end`.
+Keys sort in the versification's canonical order, so the `BETWEEN` is safe across chapter boundaries and, since versiref 0.13.0 lets a range span books (`Gen 50:25-Exod 1:2`), across book boundaries too.
 `--in` on `search` reuses the same mechanism to scope a full-text query.
+`search` takes either an FTS5 expression (the positional `QUERY`) or `--phrase`, literal text quoted into an FTS5 phrase by `reader._fts_phrase` — the same split as `versiref-search`'s `--string`/`--phrase`.
 
 ### Build Gating (warn-and-skip)
 
 `build` (`builder.py`) never aborts on unusable lines; it skips and tallies them in `BuildStats`.
-It resolves the leading `Abbrev C:V` of each line with `RefParser.parse_simple(..., silent=True)` under the `book_style` — parsing (not a bare `recognized_names` lookup) so a book can carry its own chapter styling, notably the NABRE's Esther chapter letters (`Est A:1` → `ESG`; enabled by `--chapter-letters`, which overlays the `en-nabre` style's `chapter_letters`).
+It resolves the leading `Abbrev C:V` of each line with `RefParser.parse(..., silent=True)` under the `book_style` — parsing (not a bare `recognized_names` lookup) so a book can carry its own chapter styling, notably the NABRE's Esther chapter letters (`Est A:1` → `ESG`; enabled by `--chapter-letters`, which overlays the `en-nabre` style's `chapter_letters`).
 A line is skipped when:
 
-- `parse_simple` returns `None` and the abbreviation is not recognized (e.g. the Sirach prologue `Sip`, which is not a canonical book) — tallied as an unknown book;
-- `parse_simple` returns `None` but the abbreviation *is* recognized (a malformed chapter/verse) — tallied as malformed; or
+- `parse` returns `None` and the abbreviation is not recognized (e.g. the Sirach prologue `Sip`, which is not a canonical book) — tallied as an unknown book;
+- `parse` returns `None` but the abbreviation *is* recognized (a malformed chapter/verse), or the reference is not a single verse (no chapter or verse, or a range or list such as `Gen 1:4-6`) — tallied as malformed; or
 - the book is not in the chosen versification (off-scheme).
 
-Crucially, `parse_simple` fails only on grammar, **not** on `SimpleBibleRef.is_valid`: a verse number that exceeds the versification's chapter length still parses.
+Crucially, `parse` fails only on grammar, **not** on `BibleRef.is_valid`: a verse number that exceeds the versification's chapter length still parses.
 The off-scheme check then gates on `range_keys` returning an **empty** list (book absent from the versification), **not** on `is_valid`.
 This is deliberate: `is_valid` also rejects a verse whose number exceeds the bundled versification's chapter length, which would wrongly drop legitimate verses when the source text and the bundled versification disagree on verse counts.
 `range_keys` still yields a usable key in that case, so the verse is preserved.
@@ -122,14 +123,14 @@ A future versiref `BibleRef`-overlap/inclusion feature could let off-scheme vers
 ### Database Identity and Schema Check (`database.py`)
 
 A built Bible carries a `format` metadata marker (`PRODUCT_NAME = "versiref-bible"`) so it can be told apart from other versiref-ecosystem SQLite files (e.g. `versiref-search`) that share the `schema_version` key.
-`Database.validate_schema()` checks the marker first (a foreign or unmarked database is rejected cleanly with `IncompatibleDatabaseError` rather than failing later on a missing table), then applies an additive semver rule on `schema_version`: same major, and minor >= the code's required minor (`SCHEMA_VERSION`).
+`Database.validate_schema()` checks the marker first (a foreign or unmarked database — or a file that is not SQLite or has no `metadata` table — is rejected cleanly with `IncompatibleDatabaseError` rather than failing later on a missing table), then applies an additive semver rule on `schema_version`: same major, and minor >= the code's required minor (`SCHEMA_VERSION`).
 Every read path calls it: `show_verses`, `search_verses` (`reader.py`), and `info` (`cli.py`).
 Databases built before the marker existed are unmarked and rejected with a "rebuild the Bible" message — mirroring `versiref-search`'s identical check (its commit `6c58477`).
 
 ### Source Modules (`src/versiref/bible/`)
 
 - `models.py`: `Verse` and `BuildStats` data classes.
-- `ccat_markup.py`: `strip_markup` removes recognized BibleWorks/CCAT markup (footnote blocks, note anchors, Strong's numbers, tense/voice/mood codes, and SGML-like formatting tags; italics brackets, small caps, and Psalm superscriptions are unwrapped, keeping their words); `has_markup_residue` flags leftover markup-like characters. Stripping is tolerant — unrecognized markup is kept and tallied (`BuildStats.suspect_markup`), never fatal. Only the documented tag names are recognized, so an unknown tag is reported rather than unwrapped into its attributes; the one deliberate gap is the two-digit special-Greek-character codes, which are bare digits inside Greek text. Named for the input format because other formats may be supported later.
+- `ccat_markup.py`: `strip_markup` removes recognized BibleWorks/CCAT markup (footnote blocks, note anchors, Strong's numbers, tense/voice/mood codes, and SGML-like formatting tags; italics brackets, small caps, and Psalm superscriptions are unwrapped, keeping their words; small caps are matched only where the backslashes hug whole words, so the grave accents of Beta Code Greek, as in the Rahlfs LXX, are left alone); `has_markup_residue` flags leftover markup-like characters. Stripping is tolerant — unrecognized markup is kept and tallied (`BuildStats.suspect_markup`), never fatal. Only the documented tag names are recognized, so an unknown tag is reported rather than unwrapped into its attributes; the one deliberate gap is the two-digit special-Greek-character codes, which are bare digits inside Greek text. Named for the input format because other formats may be supported later.
 - `database.py`: schema and the `Database` wrapper (insert, rebuild FTS, range and FTS queries, counts); `validate_schema`, `PRODUCT_NAME`, `IncompatibleDatabaseError`.
 - `builder.py`: `build_database` — parse each `.cat` line's leading `Abbrev C:V` with `RefParser`, compute keys, strip markup (unless `keep_markup=True`), skip-and-tally, write the DB. `chapter_letters=True` overlays the NABRE Esther letters onto the book style.
 - `reader.py`: `show_verses`, `search_verses`, and the `format_verse` plain-text formatter.
@@ -153,7 +154,7 @@ Sample `.cat` Bibles live in `reference/samples/` (gitignored): a Brenton LXX (O
 
 ## Key Dependencies
 
-- **versiref** (>=0.10.1): parsing references, versification, and verse keys. First-party (same maintainer as this package).
+- **versiref** (>=0.13.0): parsing references, versification, and verse keys. First-party (same maintainer as this package).
 - **click** (>=8.1.0): CLI framework.
 - **Python** (>=3.10).
 - **SQLite** (with FTS5): built into Python.

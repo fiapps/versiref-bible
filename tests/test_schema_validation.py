@@ -109,3 +109,31 @@ def test_cli_show_rejects_unmarked_db(bible_db: Path) -> None:
     result = CliRunner().invoke(main, ["show", str(bible_db), "John 3:16"])
     assert result.exit_code == 1
     assert "rebuild the Bible" in result.output
+
+
+def test_validate_rejects_non_sqlite_file(tmp_path: Path) -> None:
+    junk = tmp_path / "junk.db"
+    junk.write_text("not a database")
+    with Database(junk) as db:
+        with pytest.raises(IncompatibleDatabaseError):
+            db.validate_schema()
+
+
+def test_cli_rejects_sqlite_without_metadata(tmp_path: Path) -> None:
+    foreign = tmp_path / "foreign.db"
+    conn = sqlite3.connect(foreign)
+    conn.execute("CREATE TABLE x (a)")
+    conn.commit()
+    conn.close()
+    for args in (["info", str(foreign)], ["show", str(foreign), "John 3:16"]):
+        result = CliRunner().invoke(main, args)
+        assert result.exit_code == 1
+        assert "not a versiref-bible database" in result.output
+
+
+def test_cli_unknown_style_is_reported(bible_db: Path) -> None:
+    result = CliRunner().invoke(
+        main, ["show", str(bible_db), "John 3:16", "--style", "bogus"]
+    )
+    assert result.exit_code == 1
+    assert result.output.startswith("Error:")

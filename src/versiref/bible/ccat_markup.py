@@ -74,8 +74,14 @@ _SUPERSCRIPTION = re.compile(r"<<([^<>]*)>>")
 # with the ``name="value"`` shape of an attribute, so that an unrecognized
 # tag is left alone rather than unwrapped into its attributes.
 _BRACKETED_PROSE = re.compile(r"<(?![^<>]*=\")(?!\s*/)([^<>]*\s[^<>]*)>")
-# Small caps for the divine name, marked by surrounding backslashes.
-_SMALL_CAPS = re.compile(r"\\([\w'\u2019 -]{1,40})\\")
+# Small caps for the divine name, marked by surrounding backslashes that hug
+# the words they wrap ("the \LORD\ said"). A backslash is also the grave accent
+# of Beta Code Greek ("qeo\s to\n", "kai\ th\n"), where it always *follows* a
+# letter or another diacritic. So the opening backslash must start a word (not
+# follow a letter or a Beta Code diacritic), and the closing one must end one.
+_SMALL_CAPS = re.compile(
+    r"(?<![\w()/=|+^*\\])\\(?=\S)([\w'\u2019 -]{1,40})(?<=\S)\\(?!\w)"
+)
 # Italics for translator-supplied words: unwrap, keeping the words.
 _ITALICS = re.compile(r"\[([^][]*)\]")
 

@@ -7,7 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added
+
+- `search --phrase` (`-p`; Python: `search_verses(..., phrase=...)`) searches for text exactly as written, in place of the query. The query is an FTS5 search expression, so ordinary text containing punctuation, such as "so-called" or "Isa 7:14", was refused as invalid syntax; an invalid query's error now points to `--phrase`.
+
+### Fixed
+
+- Markup stripping no longer mistakes a backslash inside or after a word for a small-caps marker: `\LORD\` is recognized only where the backslashes hug whole words. Since 0.4.1 any two backslashes on a line were paired, which silently removed the grave accents of Beta Code Greek (`qeo\s to\n`). Beta Code texts are still not otherwise supported — nothing converts them to Unicode — but the build no longer alters them.
+- `show`, `search`, and `info` report a file that is not an SQLite database, or an SQLite database with no metadata table, as "not a versiref-bible database" instead of failing with a traceback; likewise an unknown `--style`.
+- `build` refuses an output path that is its own input file instead of overwriting the source with the database.
+- `build` ignores a UTF-8 byte-order mark, which used to make the first verse an unrecognized book.
+
 ### Changed
+
+- `build` counts an input line whose reference is a range or list (`Gen 1:4-6`) as malformed instead of storing it under its first verse.
+- `build` warns when no verses at all were stored.
+- `search --limit` must be at least 1.
 
 - Requires versiref 0.13.0, whose references hold their verse ranges directly and may span books.
 - `build` counts an input line whose reference names no chapter or verse as malformed instead of storing it.

@@ -114,6 +114,18 @@ versiref-bible search kjv.db 'love AND world'      # boolean
 versiref-bible search kjv.db 'redeem*'             # prefix
 ```
 
+Punctuation is query syntax in an FTS5 expression, so text such as `so-called`, `Don't`, or `Isa 7:14` is not a valid query and is refused with an error.
+To search for text as written, give `-p`/`--phrase` instead of the query:
+
+```sh
+versiref-bible search kjv.db --phrase "God-ward"
+```
+
+A phrase matches its words in sequence and reads nothing as query syntax, so `-p "love AND world"` finds just those three words in a row.
+Punctuation and spacing between the words are not compared: `-p "God-ward"` also finds "God ward".
+Use `--phrase` whenever the text comes from somewhere else, such as a quotation to be located.
+`--phrase` and a query cannot be combined.
+
 When more verses match than `--limit` allows, the kept verses are printed and a note is
 written to stderr:
 
@@ -217,12 +229,13 @@ versiref-bible show [OPTIONS] DATABASE REFERENCE
 ### `search` Command
 
 ```text
-versiref-bible search [OPTIONS] DATABASE QUERY
+versiref-bible search [OPTIONS] DATABASE [QUERY]
 ```
 
 | Option | Description |
 | ------ | ----------- |
-| `-n`, `--limit` | Maximum number of verses to return (default: 20) |
+| `-p`, `--phrase` | Literal text to search for, matched as its words in sequence (instead of `QUERY`) |
+| `-n`, `--limit` | Maximum number of verses to return, at least 1 (default: 20) |
 | `--in` | Restrict the search to a reference (e.g. `"Gen 1"`, `"John"`) |
 | `--order` | Result order: `canonical` (default) or `relevance` (bm25) |
 | `--style` | Reference style for labelling output and parsing `--in` (default: `en-sbl`) |
