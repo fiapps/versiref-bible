@@ -219,7 +219,9 @@ def build_database(
                 if has_markup_residue(text):
                     stats.suspect_markup += 1
                 if extracted.notes:
-                    notes[key] = extracted.notes
+                    # A note on a phrase with an anchor at each end is given
+                    # once per anchor (NETS); store it once.
+                    notes[key] = tuple(dict.fromkeys(extracted.notes))
 
             if beta_code:
                 # After stripping, so that markup is recognized as written

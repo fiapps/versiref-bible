@@ -372,3 +372,18 @@ def test_lettered_note_anchors() -> None:
         ("b", "Lacking in Gk"),
     ]
     assert not has_markup_residue(extracted.text)
+
+
+def test_build_stores_a_repeated_note_once(tmp_path: Path) -> None:
+    # NETS Job 9:3: a note anchored at both ends of a phrase is given twice.
+    source = tmp_path / "sample.cat"
+    source.write_text(
+        "Gen 1:1 <Na>First<Na>, <Nb>second. "
+        "{ <p><nsup>a</nsup> same <p><nsup>a</nsup> same <p><nsup>b</nsup> same }\n",
+        encoding="utf-8",
+    )
+    db_path = tmp_path / "sample.db"
+    stats = build_database(source, db_path, versification="eng")
+    assert stats.notes == 2
+    verses, _ = show_verses(db_path, "Gen 1:1", notes=True)
+    assert verses[0].notes == (Note("a", "same"), Note("b", "same"))

@@ -97,6 +97,7 @@ The translator's notes are stored in a `notes` table, keyed by verse and kept in
 A note's body is stripped of markup the same way the verse text is, and it stays out of the full-text index: searching verse text does not match note text.
 
 Notes are stored by label, independently of the `<N1>` anchors in the verse text, because the two do not always pair up (the KJV's Gen 1:20 has one anchor and four notes).
+A note repeated word for word under the same label in one verse is stored once: the New English Translation of the Septuagint gives a note twice when it marks both ends of a phrase.
 The build summary reports how many notes were extracted.
 Extraction is part of stripping, so a `--keep-markup` build stores no notes.
 
