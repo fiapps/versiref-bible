@@ -61,7 +61,7 @@ By default, `build` strips the recognized markup so the stored text — and ther
 | Markup | Example | Handling |
 | ------ | ------- | -------- |
 | Footnote block | `{<p><rsup>a</rsup> Pro 8:27-29 }` | Removed (an unterminated block runs to end of line; a stray trailing `}` is also dropped); its translator's notes are [stored separately](#translators-notes) |
-| Note/cross-reference anchor | `made<N1>`, `<Ra>separated` | Removed |
+| Note/cross-reference anchor | `made<N1>`, `<Ra>separated`, `Habira<Na>`, `<N+>And` | Removed |
 | Strong's number | `<0430>` (Hebrew), `<5547>` (Greek), `<07363b>` (homograph) | Removed |
 | Tense/voice/mood code | `(08799)` | Removed |
 | Formatting tag | `<i>…</i>`, `<sup>…</sup>`, `<link b="Gen 1:1">…</>`, and the rest of the documented SGML-like vocabulary, plus the HTML-ish `<a id="…">` and `<br/>` some exports emit | Removed — the text they wrap is kept |

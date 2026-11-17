@@ -70,9 +70,12 @@ _STRONGS = re.compile(r"\s*<(0?\d{1,5})([a-z]?)>")
 _STRONGS_MARK = "\x02"
 # A tense/voice/mood code, likewise with its leading whitespace.
 _TVM_CODE = re.compile(r"\s*\(\d{4,5}\)")
-# A footnote (<N1>) or cross-reference (<Ra>) anchor.
-_NOTE_MARKER = r"<(?:N\d{1,3}|R[a-z]{1,3})>"
-_ANCHOR = re.compile(r"<(N\d{1,3}|R[a-z]{1,3})>")
+# A footnote (<N1>) or cross-reference (<Ra>) anchor. Notes are numbered in
+# most texts, but the NETS letters them (<Na>) and marks a few with a plus
+# sign (<N+>).
+_ANCHOR_NAME = r"N(?:\d{1,3}|[a-z]{1,3}|\+)|R[a-z]{1,3}"
+_NOTE_MARKER = rf"<(?:{_ANCHOR_NAME})>"
+_ANCHOR = re.compile(rf"<({_ANCHOR_NAME})>")
 # Any closing tag, including the generic "</>" that closes a <link>.
 _CLOSE_TAG = rf"<\s*/\s*(?:{_FORMAT_NAMES}|{_BREAK_NAMES})?\s*>"
 # An opening or self-closing line-break tag.

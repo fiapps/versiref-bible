@@ -354,3 +354,21 @@ def test_build_literal_brackets(tmp_path: Path) -> None:
     assert result.exit_code == 0
     verses, _ = show_verses(db_path, "Gen 1:20")
     assert verses[0].text == "(a) [b] c (d) [e]"
+
+
+def test_lettered_note_anchors() -> None:
+    # The NETS letters its notes and marks a few with a plus sign.
+    line = (
+        "<N+>And they spoke<Na>, saying<Nb>. "
+        "{ <p><nsup>+</nsup> Judges A <p><nsup>a</nsup> Heb = <i>cried</i> "
+        "<p><nsup>b</nsup> Lacking in Gk }"
+    )
+    extracted = extract_markup(line)
+    assert extracted.text == "And they spoke, saying."
+    assert extracted.anchors == ("N+", "Na", "Nb")
+    assert [(n.label, n.text) for n in extracted.notes] == [
+        ("+", "Judges A"),
+        ("a", "Heb = cried"),
+        ("b", "Lacking in Gk"),
+    ]
+    assert not has_markup_residue(extracted.text)
