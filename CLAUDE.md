@@ -171,7 +171,7 @@ Sample `.cat` Bibles live in `reference/samples/` (gitignored): a Brenton LXX (O
 
 ## Key Dependencies
 
-- **versiref** (>=0.14.0): parsing references, versification, and verse keys. First-party (same maintainer as this package).
+- **versiref** (>=0.14.1): parsing references, versification, and verse keys. First-party (same maintainer as this package).
 - **click** (>=8.1.0): CLI framework.
 - **Python** (>=3.10).
 - **SQLite** (with FTS5): built into Python.

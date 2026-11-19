@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The NABRE's lettered chapters of Esther (`Est A:1` … `Est F:11`) build under `--versification nabre` without any flag, and are stored as Esther (`EST`) in the order the NABRE prints them: A before 1:1, C after 4:17, F after 10:3, and so on. `show` reads them in that order and labels them as lettered chapters in any style (`Esth C:12`), and a range can pass between a numbered and a lettered chapter (`Esth 4:1-C:30`). They had been stored as a separate book, `ESG`, keyed before all of Esther.
 - Greek Esther's Addition A (1:1a–r) is stored before the verse 1:1 it precedes in `lxx` and `cei`, as the text has it. A range that starts at 1:1 now starts at the base verse; ask for the chapter to include the addition.
 
+### Fixed
+
+- `show` reads a verse letter `f` written against its verse, as in `Esg 1:1f`, as that inserted verse wherever the versification lists one, where it had read "1:1 and following" and returned Esther 1:1–2. `build` had already read such a line correctly by turning the "and following" notation off; with versiref 0.14.1, now required, it no longer needs to.
+
 ### Removed
 
 - **Breaking:** `build --chapter-letters` (Python: `build_database(chapter_letters=...)`). The lettered chapters now come from the `nabre` versification, so the flag has nothing left to do.

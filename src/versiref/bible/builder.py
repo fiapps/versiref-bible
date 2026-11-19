@@ -10,16 +10,6 @@ from .ccat_markup import extract_markup, has_markup_residue
 from .database import PRODUCT_NAME, SCHEMA_VERSION, SEARCH_FOLDING, Database
 from .models import BuildStats, Note, Verse
 
-# A CCAT file numbers every verse explicitly, so the SBL-style "and following"
-# notation (``f``/``ff``) never appears in one. Left enabled, versiref reads a
-# trailing ``f``/``ff`` on a reference as that notation, which shadows the verse
-# *letters* ``f``/``ff`` that the Greek additions to Esther use (Est 1:1f,
-# 4:17f, …), folding those sub-verses onto their base verse. The build disables
-# the notation by pointing its markers at tokens no reference can equal (a
-# sub-verse is one or two lowercase letters, never containing a NUL).
-_DISABLED_FOLLOWING_VERSE = "\x00f"
-_DISABLED_FOLLOWING_VERSES = "\x00ff"
-
 
 def _load_book_style(book_style: str | Path) -> RefStyle:
     """Load the style that reads the file's book abbreviations.
@@ -75,10 +65,9 @@ def build_database(
     lettered chapters of Esther (``Est A:1``), which versiref holds as verses
     inserted beside verses of EST (Esther C:12 is EST 4:17, subverse ``C12``).
 
-    The "and following" notation (``f``/``ff``) is disabled while parsing, since
-    a CCAT file spells out every verse and never uses it; this frees the verse
-    letters ``f``/``ff`` for the Greek additions to Esther (see
-    :data:`_DISABLED_FOLLOWING_VERSE`).
+    A verse letter ``f`` or ``ff``, as in the Greek additions to Esther
+    (``Est 1:1f``), is read as that inserted verse wherever the versification
+    lists it, not as the "and following" notation (versiref >= 0.14.1).
 
     Recognized CCAT/BibleWorks markup (footnote blocks, note anchors, Strong's
     numbers, italics brackets) is stripped from the verse text before storage
@@ -127,10 +116,6 @@ def build_database(
 
     vers = Versification.named(versification)
     style = _load_book_style(book_style)
-    # Mutate the freshly loaded style in place (loading returns a new instance
-    # each call, so this affects no one else). See _DISABLED_FOLLOWING_VERSE.
-    style.following_verse = _DISABLED_FOLLOWING_VERSE
-    style.following_verses = _DISABLED_FOLLOWING_VERSES
     parser = RefParser(style, vers)
     recognized = style.recognized_names
 

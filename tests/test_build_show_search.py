@@ -165,8 +165,9 @@ def test_lettered_chapters_off_scheme_without_them(tmp_path: Path) -> None:
 
 
 # The Greek additions to Esther letter their verses a, b, c, …, and CEI 2008
-# uses the letter ``f`` (e.g. Est 1:1f). Left as the "and following" marker,
-# ``f`` would parse away and fold that verse onto its base verse.
+# uses the letter ``f`` (e.g. Est 1:1f). versiref (>= 0.14.1) reads a glued
+# ``f`` as that verse where the versification lists it, not as "and following",
+# which would fold the verse onto its base verse.
 ESTHER_LETTER_F_SAMPLE = """\
 Esg 1:1 The narrative begins after the dream.
 Esg 1:1f A verse of the dream of Mordecai whose letter is f.
@@ -174,7 +175,7 @@ Esg 1:2 The narrative continues.
 """
 
 
-def test_following_notation_disabled_keeps_verse_letter_f(tmp_path: Path) -> None:
+def test_verse_letter_f_is_not_and_following(tmp_path: Path) -> None:
     source = tmp_path / "esther.cat"
     source.write_text(ESTHER_LETTER_F_SAMPLE, encoding="utf-8")
     db_path = tmp_path / "esther.db"
@@ -189,6 +190,11 @@ def test_following_notation_disabled_keeps_verse_letter_f(tmp_path: Path) -> Non
         "A verse of the dream of Mordecai whose letter is f.",
         "The narrative begins after the dream.",
         "The narrative continues.",
+    ]
+    # show reads the glued letter as that verse too, not as "and following".
+    verses, _ = show_verses(db_path, "Esg 1:1f", style_name="en-bibleworks")
+    assert [v.text for v in verses] == [
+        "A verse of the dream of Mordecai whose letter is f.",
     ]
 
 
