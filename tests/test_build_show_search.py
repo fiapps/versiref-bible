@@ -110,69 +110,67 @@ def test_search_invalid_order_rejected(bible_db: Path) -> None:
         search_verses(bible_db, "God", order="bogus")
 
 
-# The NABRE prints the Additions to Esther as chapters A-F (book ESG); the
-# BibleWorks abbreviation "Est" otherwise resolves to EST for numeric chapters.
+# The NABRE prints the Additions to Esther as chapters A-F of Esther itself.
+# versiref (>= 0.14.0) holds each lettered verse as one inserted beside a verse
+# of EST, in reading order: A before 1:1, C after 4:17, F after 10:3.
 ESTHER_SAMPLE = """\
 Est 1:1 Now it came to pass in the days of Ahasuerus.
+Est 4:17 Mordecai went away and did all that Esther commanded.
 Est A:1 In the second year Mordecai had a dream.
+Est C:12 Esther the queen sought refuge in the Lord.
 Est F:11 These signs happened among God's people.
 """
 
 
-def test_chapter_letters_resolve_to_esg(tmp_path: Path) -> None:
+def test_nabre_lettered_chapters_are_esther(tmp_path: Path) -> None:
     source = tmp_path / "esther.cat"
     source.write_text(ESTHER_SAMPLE, encoding="utf-8")
     db_path = tmp_path / "esther.db"
-    stats = build_database(source, db_path, versification="nabre", chapter_letters=True)
-    assert stats.stored == 3
+    stats = build_database(source, db_path, versification="nabre")
+    assert stats.stored == 5
+    assert stats.malformed == 0
     assert not stats.unknown_books
     assert not stats.off_scheme_books
 
-    # The lettered chapters parse as ESG; the numeric one stays EST.
-    letters, _ = show_verses(db_path, "Est A:1-F:11", style_name="en-nabre")
-    assert [v.book_id for v in letters] == ["ESG", "ESG"]
-    numeric, _ = show_verses(db_path, "Est 1:1", style_name="en-nabre")
-    assert numeric[0].book_id == "EST"
+    # A whole-book reference takes in the lettered chapters, in reading order.
+    style = RefStyle.named("en-sbl")
+    verses, db_vers = show_verses(db_path, "Esth")
+    assert {v.book_id for v in verses} == {"EST"}
+    assert [format_verse(v, style, db_vers).split("\t")[0] for v in verses] == [
+        "Esth A:1",
+        "Esth 1:1",
+        "Esth 4:17",
+        "Esth C:12",
+        "Esth F:11",
+    ]
 
-    # The label round-trips back to a letter under a letter-aware style.
-    style = RefStyle.named("en-nabre")
-    verses, db_vers = show_verses(db_path, "Est A:1", style_name="en-nabre")
-    assert format_verse(verses[0], style, db_vers).startswith("Esth A:1\t")
+    # A range can pass between a numbered chapter and a lettered one.
+    verses, _ = show_verses(db_path, "Esth 4:1-C:30")
+    assert [(v.verse, v.subverse) for v in verses] == [(17, ""), (17, "C12")]
+    # A numbered chapter leaves out a lettered chapter at its edge.
+    verses, _ = show_verses(db_path, "Esth 4")
+    assert [v.subverse for v in verses] == [""]
 
 
-def test_chapter_letters_without_flag_are_skipped(tmp_path: Path) -> None:
+def test_lettered_chapters_off_scheme_without_them(tmp_path: Path) -> None:
     source = tmp_path / "esther.cat"
     source.write_text(ESTHER_SAMPLE, encoding="utf-8")
     db_path = tmp_path / "esther.db"
-    # Without the flag the default style has no letters, so "Est A"/"Est F" do
-    # not parse; "Est" is recognized, so they count as malformed, not unknown.
-    stats = build_database(source, db_path, versification="nabre")
-    assert stats.stored == 1
-    assert stats.malformed == 2
+    # Lettered chapters parse only under a versification that has them; under
+    # eng "Est" is recognized, so they count as malformed, not unknown.
+    stats = build_database(source, db_path, versification="eng")
+    assert stats.stored == 2
+    assert stats.malformed == 3
     assert not stats.unknown_books
-
-
-def test_chapter_letters_off_scheme_when_book_absent(tmp_path: Path) -> None:
-    source = tmp_path / "esther.cat"
-    source.write_text(ESTHER_SAMPLE, encoding="utf-8")
-    db_path = tmp_path / "esther.db"
-    # The vulgata versification has no ESG, so the lettered chapters parse but
-    # yield no key: off-scheme, warned-and-skipped rather than stored/malformed.
-    stats = build_database(
-        source, db_path, versification="vulgata", chapter_letters=True
-    )
-    assert stats.stored == 1
-    assert stats.off_scheme_books.get("Est") == 2
-    assert stats.malformed == 0
 
 
 # The Greek additions to Esther letter their verses a, b, c, …, and CEI 2008
 # uses the letter ``f`` (e.g. Est 1:1f). Left as the "and following" marker,
 # ``f`` would parse away and fold that verse onto its base verse.
 ESTHER_LETTER_F_SAMPLE = """\
-Esg 1:1 The dream of Mordecai, opening the additions.
-Esg 1:1f A lettered addition verse whose letter is f.
-Esg 1:2 The narrative continues after the dream.
+Esg 1:1 The narrative begins after the dream.
+Esg 1:1f A verse of the dream of Mordecai whose letter is f.
+Esg 1:2 The narrative continues.
 """
 
 
@@ -184,12 +182,13 @@ def test_following_notation_disabled_keeps_verse_letter_f(tmp_path: Path) -> Non
     # All three lines get distinct keys: 1:1f is not folded onto 1:1.
     assert stats.stored == 3
     assert stats.duplicates == 0
-    # A range spanning the base verses includes the lettered verse between them.
-    verses, _ = show_verses(db_path, "Esg 1:1-2", style_name="en-bibleworks")
+    # cei puts Addition A (1:1a-r) before the base verse 1:1, as the text does,
+    # so the chapter (not "1:1-2", which starts at the base verse) takes it in.
+    verses, _ = show_verses(db_path, "Esg 1", style_name="en-bibleworks")
     assert [v.text for v in verses] == [
-        "The dream of Mordecai, opening the additions.",
-        "A lettered addition verse whose letter is f.",
-        "The narrative continues after the dream.",
+        "A verse of the dream of Mordecai whose letter is f.",
+        "The narrative begins after the dream.",
+        "The narrative continues.",
     ]
 
 

@@ -10,12 +10,6 @@ from .ccat_markup import extract_markup, has_markup_residue
 from .database import PRODUCT_NAME, SCHEMA_VERSION, SEARCH_FOLDING, Database
 from .models import BuildStats, Note, Verse
 
-# Bundled style that defines the NABRE's Esther chapter letters (ESG A–F). When
-# ``chapter_letters=True``, the build overlays this style's ``chapter_letters``
-# onto the chosen book style so a lettered chapter parses; the letter table
-# itself lives in versiref, not here (see :func:`build_database`).
-_CHAPTER_LETTER_STYLE = "en-nabre"
-
 # A CCAT file numbers every verse explicitly, so the SBL-style "and following"
 # notation (``f``/``ff``) never appears in one. Left enabled, versiref reads a
 # trailing ``f``/``ff`` on a reference as that notation, which shadows the verse
@@ -66,7 +60,6 @@ def build_database(
     encoding: str = "utf-8",
     keep_markup: bool = False,
     literal_brackets: bool = False,
-    chapter_letters: bool = False,
 ) -> BuildStats:
     """Build a Bible database from a CCAT-format ``.cat`` file.
 
@@ -77,11 +70,10 @@ def build_database(
     (e.g. the Sirach prologue ``Sip``) or whose book is absent from the
     versification are warned-and-skipped — see :class:`BuildStats`.
 
-    Parsing (rather than a bare abbreviation lookup) lets the file use the
-    book's own chapter styling, including the NABRE-style chapter letters for
-    the Additions to Esther (``Est A:1`` → ESG). Those letters are not in the
-    default ``en-bibleworks`` style, so pass ``chapter_letters=True`` to overlay
-    them (sourced from the bundled ``en-nabre`` style) onto ``book_style``.
+    Parsing (rather than a bare abbreviation lookup) lets the file use
+    whatever chapter numbering its versification has, including the NABRE's
+    lettered chapters of Esther (``Est A:1``), which versiref holds as verses
+    inserted beside verses of EST (Esther C:12 is EST 4:17, subverse ``C12``).
 
     The "and following" notation (``f``/``ff``) is disabled while parsing, since
     a CCAT file spells out every verse and never uses it; this frees the verse
@@ -119,9 +111,6 @@ def build_database(
             reading ``[word]`` as italics and ``[[``/``]]`` as escapes for a
             printed bracket, for a text whose brackets are all printed ones;
             the rest of the markup is still stripped (default ``False``).
-        chapter_letters: Overlay the NABRE Esther chapter letters (ESG A–F,
-            from the ``en-nabre`` style) onto ``book_style`` so a lettered
-            chapter such as ``Est A:1`` parses (default ``False``).
 
     Returns:
         A :class:`BuildStats` summary of what was stored and skipped.
@@ -142,11 +131,6 @@ def build_database(
     # each call, so this affects no one else). See _DISABLED_FOLLOWING_VERSE.
     style.following_verse = _DISABLED_FOLLOWING_VERSE
     style.following_verses = _DISABLED_FOLLOWING_VERSES
-    if chapter_letters:
-        # Mutate the freshly loaded style in place (named() returns a new
-        # instance each call, so this affects no one else): the switch is just
-        # sugar for building with a style that carries the letters.
-        style.chapter_letters = RefStyle.named(_CHAPTER_LETTER_STYLE).chapter_letters
     parser = RefParser(style, vers)
     recognized = style.recognized_names
 

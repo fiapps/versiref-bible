@@ -42,16 +42,17 @@ chosen versification, and indexed for full-text search with SQLite FTS5.
 
 ## Chapter letters (Additions to Esther)
 
-The NABRE prints the Additions to Esther as chapters **A–F** rather than numbering them as verses of the surrounding Greek chapters.
-If your source file follows that convention — `Est A:1`, `Est A:2`, … `Est F:11` — pass `--chapter-letters` so the lettered chapters parse as the Greek Esther book (`ESG`):
+The NABRE prints the Additions to Esther as chapters **A–F** of Esther rather than numbering them as verses of the surrounding Greek chapters.
+The `nabre` versification has these lettered chapters, so a source file that follows that convention — `Est A:1`, `Est A:2`, … `Est F:11` — builds as it stands:
 
 ```sh
-versiref-bible build nab.cat -o nabre.db --versification nabre --chapter-letters
+versiref-bible build nab.cat -o nabre.db --versification nabre
 ```
 
-The switch overlays the letters onto whatever `--book-style` you use, so BibleWorks abbreviations keep working; a numeric `Est 1:1` still resolves to plain Esther (`EST`).
-The letters are defined by versiref's `en-nabre` style, so a versification that maps `ESG` (such as `nabre`) is required — otherwise the lettered lines are [skipped as off-scheme](#skipped-lines).
-To see the letters in output, query with a letter-aware style, e.g. `--style en-nabre`.
+The lettered chapters belong to Esther (`EST`) and stand where the NABRE prints them: A before 1:1, B after 3:13, C after 4:17, D before 5:1, E after 8:12, and F after 10:3.
+So `show nabre "Esth"` reads the book in order, and a range can pass between a numbered and a lettered chapter (`Esth 4:1-C:30`).
+A numbered chapter leaves out a lettered chapter at its edge: `Esth 4` ends at 4:17.
+Under a versification without lettered chapters, the lettered lines do not parse and are [skipped as malformed](#skipped-lines).
 
 ## Markup Stripping
 

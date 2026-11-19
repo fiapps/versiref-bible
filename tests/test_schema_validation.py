@@ -14,7 +14,7 @@ from versiref.bible import (
     show_verses,
 )
 from versiref.bible.cli import main
-from versiref.bible.database import SCHEMA_VERSION
+from versiref.bible.database import FEATURES, SCHEMA_VERSION
 
 SAMPLE = "Joh 3:16 For God so loved the world, that he gave his only begotten Son.\n"
 
@@ -68,16 +68,27 @@ def test_validate_rejects_foreign_product(bible_db: Path) -> None:
         db.validate_schema()
 
 
-def test_validate_rejects_incompatible_major(bible_db: Path) -> None:
-    # A schema 1.x database is the pre-0.10 format with 8-digit verse keys;
-    # under the current major (2) it is rejected so it gets rebuilt rather than
-    # silently returning no matches against 10-digit keys.
-    _set_meta(bible_db, "schema_version", "1.0")
+@pytest.mark.parametrize("version", ["1.0", "2.0", "2.1"])
+def test_validate_rejects_older_major(bible_db: Path, version: str) -> None:
+    # 1.x has 8-digit verse keys; 2.x has keys from versiref < 0.14.0, whose
+    # nabre book numbers and Greek Esther 1:1 order have since changed. Either
+    # would silently return the wrong verses, so it is rejected to be rebuilt.
+    _set_meta(bible_db, "schema_version", version)
     with (
         Database(bible_db) as db,
-        pytest.raises(IncompatibleDatabaseError, match="incompatible"),
+        pytest.raises(IncompatibleDatabaseError, match=r"incompatible.*rebuild"),
     ):
         db.validate_schema()
+
+
+def test_validate_rejects_newer_major_without_rebuild_advice(bible_db: Path) -> None:
+    _set_meta(bible_db, "schema_version", "4.0")
+    with (
+        Database(bible_db) as db,
+        pytest.raises(IncompatibleDatabaseError, match="incompatible") as excinfo,
+    ):
+        db.validate_schema()
+    assert "rebuild" not in str(excinfo.value)
 
 
 def test_validate_rejects_unparseable_version(bible_db: Path) -> None:
@@ -91,7 +102,7 @@ def test_validate_rejects_unparseable_version(bible_db: Path) -> None:
 
 def test_validate_accepts_higher_minor(bible_db: Path) -> None:
     # Same major, higher minor is forward-compatible (additive schema rule).
-    _set_meta(bible_db, "schema_version", "2.9")
+    _set_meta(bible_db, "schema_version", "3.9")
     with Database(bible_db) as db:
         db.validate_schema()  # does not raise
 
@@ -149,42 +160,20 @@ def test_cli_unknown_style_is_reported(bible_db: Path) -> None:
     assert result.output.startswith("Error:")
 
 
-def _downgrade_to_2_0(db_path: Path) -> None:
-    """Reshape a database into what a pre-0.5.0 build (schema 2.0) wrote."""
-    conn = sqlite3.connect(db_path)
-    conn.executescript(
-        "ALTER TABLE verses DROP COLUMN subverse;"
-        "DROP TABLE notes;"
-        "DELETE FROM metadata WHERE key = 'notes_count';"
-        "UPDATE metadata SET value = '2.0' WHERE key = 'schema_version';"
-    )
-    conn.commit()
-    conn.close()
-
-
 def test_build_writes_current_schema_version(bible_db: Path) -> None:
     with Database(bible_db) as db:
         assert db.get_metadata("schema_version") == SCHEMA_VERSION
-        db.require_feature("notes")  # does not raise
 
 
-def test_core_reads_accept_schema_2_0(bible_db: Path) -> None:
-    # A feature's minor bump must not lock older databases out of show/search.
-    _downgrade_to_2_0(bible_db)
-    verses, _ = show_verses(bible_db, "John 3:16")
-    assert [v.subverse for v in verses] == [""]
-    _, total, _ = search_verses(bible_db, "loved")
-    assert total == 1
-    result = CliRunner().invoke(main, ["info", str(bible_db)])
-    assert result.exit_code == 0
-    assert "notes_count" not in result.output
-
-
-def test_notes_on_schema_2_0_says_rebuild(bible_db: Path) -> None:
-    _downgrade_to_2_0(bible_db)
-    with pytest.raises(IncompatibleDatabaseError, match=r"rebuild.*>= 0\.5\.0"):
-        show_verses(bible_db, "John 3:16", notes=True)
-    result = CliRunner().invoke(main, ["show", str(bible_db), "John 3:16", "--notes"])
-    assert result.exit_code == 1
-    assert "translator's notes" in result.output
-    assert "rebuild the Bible" in result.output
+def test_require_feature_gates_a_later_minor(
+    bible_db: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # No feature postdates 3.0 yet; a hypothetical 3.1 one exercises the gate.
+    monkeypatch.setitem(FEATURES, "widgets", ("widgets", "3.1", "9.9.9"))
+    with Database(bible_db) as db:
+        db.validate_schema()  # the core reads still accept 3.0
+        with pytest.raises(IncompatibleDatabaseError, match=r"rebuild.*>= 9\.9\.9"):
+            db.require_feature("widgets")
+    _set_meta(bible_db, "schema_version", "3.1")
+    with Database(bible_db) as db:
+        db.require_feature("widgets")  # does not raise

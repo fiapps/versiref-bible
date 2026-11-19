@@ -76,14 +76,10 @@ def show_verses(
 
     Raises:
         ValueError: If the reference cannot be parsed.
-        IncompatibleDatabaseError: If ``notes`` is asked of a database built
-            before notes were stored.
 
     """
     with Database(db_path) as db:
         db.validate_schema()
-        if notes:
-            db.require_feature("notes")
         db_vers = _db_versification(db)
         source_vers = (
             Versification.named(from_versification)

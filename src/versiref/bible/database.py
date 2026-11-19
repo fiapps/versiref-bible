@@ -24,14 +24,17 @@ PRODUCT_NAME = "versiref-bible"
 # are gated separately (see FEATURES and Database.require_feature).
 #
 # 2.1: verses.subverse; the notes table.
-SCHEMA_VERSION = "2.1"
-REQUIRED_SCHEMA_VERSION = "2.0"
+# 3.0: verse keys from versiref 0.14.0, which renumbered nabre (Esther's
+#      lettered chapters joined EST, so every later book moved down one) and
+#      reordered Greek Esther 1:1 in lxx and cei. A 2.x database's keys no
+#      longer match the references parsed against them, so it must be rebuilt.
+SCHEMA_VERSION = "3.0"
+REQUIRED_SCHEMA_VERSION = "3.0"
 
 # Feature -> (description, schema version that introduced it, first package
-# version to build it).
-FEATURES: dict[str, tuple[str, str, str]] = {
-    "notes": ("translator's notes", "2.1", "0.5.0"),
-}
+# version to build it). Empty at a major version's start: everything 3.0 has is
+# part of the baseline that REQUIRED_SCHEMA_VERSION checks.
+FEATURES: dict[str, tuple[str, str, str]] = {}
 
 
 # Value of the "search_folding" metadata key: the full-text index holds Greek
@@ -219,9 +222,15 @@ class Database:
         version, (db_major, db_minor) = self._schema_version()
         req_major, req_minor = _parse_schema_version(REQUIRED_SCHEMA_VERSION)
         if db_major != req_major or db_minor < req_minor:
+            # An older schema is cured by rebuilding; a newer one is not.
+            advice = (
+                "; rebuild the Bible"
+                if (db_major, db_minor) < (req_major, req_minor)
+                else ""
+            )
             raise IncompatibleDatabaseError(
                 f"{self.db_path}: schema version {version} is incompatible with "
-                f"this code (requires {REQUIRED_SCHEMA_VERSION})"
+                f"this code (requires {REQUIRED_SCHEMA_VERSION}){advice}"
             )
 
     def _schema_version(self) -> tuple[str, tuple[int, int]]:
@@ -258,16 +267,10 @@ class Database:
                 f"Bible with versiref-bible >= {package}"
             )
 
-    def _verse_columns(self) -> str:
-        """Return the verse columns to select, aliased ``v``.
-
-        A database built before schema 2.1 has no ``subverse`` column; it
-        reads as empty, which keeps that database's labels as they were.
-        """
-        conn = self._require_conn()
-        columns = {row["name"] for row in conn.execute("PRAGMA table_info(verses)")}
-        subverse = "v.subverse" if "subverse" in columns else "'' AS subverse"
-        return f"v.verse_key, v.book_id, v.chapter, v.verse, v.text, {subverse}"
+    @staticmethod
+    def _verse_columns() -> str:
+        """Return the verse columns to select, aliased ``v``."""
+        return "v.verse_key, v.book_id, v.chapter, v.verse, v.text, v.subverse"
 
     def insert_verses(self, verses: Iterable[Verse]) -> None:
         """Bulk-insert verses in a single transaction.
@@ -303,8 +306,7 @@ class Database:
     ) -> dict[int, tuple[Note, ...]]:
         """Return the notes of verses in the given key ranges, by verse key.
 
-        The database must have the ``notes`` feature (see
-        :meth:`require_feature`). A verse with no notes has no entry.
+        A verse with no notes has no entry.
         """
         conn = self._require_conn()
         clause, params = _range_clause(ranges)

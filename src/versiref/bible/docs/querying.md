@@ -211,7 +211,7 @@ versiref-bible info kjv.db
 built_at: 2026-05-31T19:02:18
 format: versiref-bible
 notes_count: 7794
-schema_version: 2.1
+schema_version: 3.0
 source: kjv.cat
 title: King James Version
 verse_count: 31102
@@ -228,7 +228,9 @@ before this check existed, is rejected with a message telling you to rebuild it,
 failing partway through a query.
 
 The schema version is `major.minor`.
-A minor version adds to the schema without disturbing what was there, so a newer versiref-bible still reads an older database of the same major version; only the feature the minor version added (such as `--notes`, added in 2.1) asks for a rebuild.
+A minor version adds to the schema without disturbing what was there, so a newer versiref-bible still reads an older database of the same major version; only the feature the minor version added asks for a rebuild.
+A major version means the stored data no longer matches what the code expects, so every older database must be rebuilt.
+Schema 3.0 (versiref-bible 0.6.0) is one: versiref 0.14.0 changed the verse keys of the `nabre` versification and of Greek Esther 1:1 in `lxx` and `cei`, and a 2.x database would return the wrong verses.
 
 ## Listing Available Bibles
 

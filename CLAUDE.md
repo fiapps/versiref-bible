@@ -65,7 +65,7 @@ Each Bible is a single SQLite database (`database.py`) with three tables:
    - `book_id`: Paratext book ID (e.g. `JHN`).
    - `chapter`, `verse`: integers.
    - `text`: the verse text, stored verbatim.
-   - `subverse`: the letters of an inserted verse (`a` in ESG 4:17a), else `''`; used only for the output label (schema 2.1).
+   - `subverse`: the letters of an inserted verse (`a` in ESG 4:17a, `C12` in the NABRE's Esther C:12), else `''`; used only for the output label.
 
 2. **verses_fts**: an FTS5 external-content virtual table over `verses.text`.
    - `content='verses'`, `content_rowid='verse_key'`.
@@ -74,7 +74,7 @@ Each Bible is a single SQLite database (`database.py`) with three tables:
 
 3. **metadata**: key-value pairs (`format`, `title`, `versification`, `source`, `verse_count`, `notes_count`, `search_folding`, `built_at`, `schema_version`).
 
-A fourth table, **notes** (`verse_key`, `label`, `text`; schema 2.1), holds the translator's notes extracted from the footnote blocks, in source order within a verse.
+A fourth table, **notes** (`verse_key`, `label`, `text`), holds the translator's notes extracted from the footnote blocks, in source order within a verse.
 It is not full-text indexed.
 
 ### Verse Encoding
@@ -84,13 +84,14 @@ Verse keys are integers of the form `BBCCCVVVSS`:
 - BB: book number according to the versification's book order.
 - CCC: chapter (001-999).
 - VVV: verse (001-999).
-- SS: subverse ordinal (00 for the base verse; nonzero for an inserted verse such as the Greek additions to Esther, ESG 4:17a-z, keyed after their base verse). From `Versification.partial_ordinal`.
+- SS: subverse ordinal (00 for a verse with no inserted verses; otherwise each inserted verse and the base verse take their places in the versification's reading order, so an inserted verse may key before its base verse, as the Greek Esther 1:1a-r do in `lxx` and `cei` and the NABRE's Esther A does before 1:1). From `Versification.partial_ordinal`.
 
 Example: John 3:16 in `eng` → `4300301600`.
 
 Keys come from versiref, not from hand-rolled arithmetic (versiref 0.10.0 widened the key from `BBCCCVVV` to `BBCCCVVVSS`; the package treats keys as opaque, so only stored width changed).
 Both sides parse with `RefParser.parse` and take the integers from `BibleRef.range_keys()`: the build side from each line's leading `Abbrev C:V`, the show side from the requested reference (versiref 0.13.0 removed `SimpleBibleRef`; a `BibleRef` holds its verse ranges directly).
 Because both use the same versification, the keys line up, which is what makes range lookups correct.
+When versiref changes the keys a versification yields (0.14.0 renumbered `nabre` and reordered Greek Esther 1:1 in `lxx` and `cei`), stored keys stop matching parsed references and `show` silently returns the wrong verses; that calls for a schema major bump, which makes every older database be rebuilt.
 
 ### Range Lookup
 
@@ -102,7 +103,7 @@ Keys sort in the versification's canonical order, so the `BETWEEN` is safe acros
 ### Build Gating (warn-and-skip)
 
 `build` (`builder.py`) never aborts on unusable lines; it skips and tallies them in `BuildStats`.
-It resolves the leading `Abbrev C:V` of each line with `RefParser.parse(..., silent=True)` under the `book_style` — parsing (not a bare `recognized_names` lookup) so a book can carry its own chapter styling, notably the NABRE's Esther chapter letters (`Est A:1` → `ESG`; enabled by `--chapter-letters`, which overlays the `en-nabre` style's `chapter_letters`).
+It resolves the leading `Abbrev C:V` of each line with `RefParser.parse(..., silent=True)` under the `book_style` — parsing (not a bare `recognized_names` lookup) so a book can carry its own chapter styling, notably the NABRE's lettered chapters of Esther (`Est A:1`), which versiref (>= 0.14.0) reads in any style under a versification that has them and holds as verses inserted beside verses of `EST` (Esther C:12 is `EST 4:17`, subverse `C12`).
 A line is skipped when:
 
 - `parse` returns `None` and the abbreviation is not recognized (e.g. the Sirach prologue `Sip`, which is not a canonical book) — tallied as an unknown book;
@@ -129,13 +130,14 @@ A future versiref `BibleRef`-overlap/inclusion feature could let off-scheme vers
 ### Database Identity and Schema Check (`database.py`)
 
 A built Bible carries a `format` metadata marker (`PRODUCT_NAME = "versiref-bible"`) so it can be told apart from other versiref-ecosystem SQLite files (e.g. `versiref-search`) that share the `schema_version` key.
-`Database.validate_schema()` checks the marker first (a foreign or unmarked database — or a file that is not SQLite or has no `metadata` table — is rejected cleanly with `IncompatibleDatabaseError` rather than failing later on a missing table), then applies an additive semver rule on `schema_version`: same major, and minor >= the minor the core reads require (`REQUIRED_SCHEMA_VERSION`, 2.0).
+`Database.validate_schema()` checks the marker first (a foreign or unmarked database — or a file that is not SQLite or has no `metadata` table — is rejected cleanly with `IncompatibleDatabaseError` rather than failing later on a missing table), then applies an additive semver rule on `schema_version`: same major, and minor >= the minor the core reads require (`REQUIRED_SCHEMA_VERSION`, 3.0); an older major is told to rebuild.
 Every read path calls it: `show_verses`, `search_verses` (`reader.py`), and `info` (`cli.py`).
 Databases built before the marker existed are unmarked and rejected with a "rebuild the Bible" message — mirroring `versiref-search`'s identical check (its commit `6c58477`).
 
-The version a build *writes* (`SCHEMA_VERSION`, 2.1) is separate from the one the core reads *require*, so an additive minor bump never locks an older database out of `show`/`search`/`info`.
-Each feature a minor bump adds is listed in `FEATURES` and gates only its own reads through `Database.require_feature`, which fails on an older database with a "rebuild the Bible with versiref-bible >= X" message (`show --notes` on a 2.0 build).
-A column a minor bump adds is read tolerantly instead (`Database._verse_columns` selects `''` for a missing `subverse`).
+The version a build *writes* (`SCHEMA_VERSION`, 3.0) is separate from the one the core reads *require*, so an additive minor bump never locks an older database out of `show`/`search`/`info`.
+Each feature a minor bump adds is listed in `FEATURES` and gates only its own reads through `Database.require_feature`, which fails on an older database with a "rebuild the Bible with versiref-bible >= X" message.
+`FEATURES` is empty at the start of a major version: 3.0 folded 2.1's notes and `subverse` into the baseline, since a major bump rebuilds everything anyway.
+A column a later minor bump adds should be read tolerantly (selecting a default for a missing column), so the core reads still accept the older minor.
 Every feature build also writes a `<feature>_count` metadata key, always, zero included: present means the database has the feature, `0` that this Bible has no such data, absent that it predates the feature.
 
 ### Source Modules (`src/versiref/bible/`)
@@ -145,7 +147,7 @@ Every feature build also writes a `<feature>_count` metadata key, always, zero i
 - `beta_code.py`: `beta_to_unicode` converts Beta Code Greek to Unicode (NFC) — a regex finds each letter with its marks and Unicode normalization composes them, so there is no table of combinations. Both capital conventions are accepted (BibleWorks `A)`, TLG `*)a`); marks that cannot sit on the preceding letter are kept as punctuation. Selected by the special `encoding` value `beta-code` (`is_beta_code`), which the builder handles itself: the file is read as UTF-8 and only each line's text is converted, after markup stripping, never its leading reference.
 - `greek.py`: `fold_greek`, the search folding shared by the index build and the query.
 - `database.py`: schema and the `Database` wrapper (insert, rebuild FTS, range and FTS queries, notes, counts); `validate_schema`, `require_feature`, `PRODUCT_NAME`, `IncompatibleDatabaseError`.
-- `builder.py`: `build_database` — parse each `.cat` line's leading `Abbrev C:V` with `RefParser`, compute keys, strip markup and extract notes (unless `keep_markup=True`), skip-and-tally, write the DB. `chapter_letters=True` overlays the NABRE Esther letters onto the book style. `book_style` is a named style or a style file (`_load_book_style`: a `Path`, or a string ending in `.json` or containing a separator, goes to `RefStyle.from_file`), so `override_names`/`also_recognize` can reroute a file's abbreviations (BibleWorks LXX `Dan` → `DAG`, `Jdg` → `JDB`).
+- `builder.py`: `build_database` — parse each `.cat` line's leading `Abbrev C:V` with `RefParser`, compute keys, strip markup and extract notes (unless `keep_markup=True`), skip-and-tally, write the DB. `book_style` is a named style or a style file (`_load_book_style`: a `Path`, or a string ending in `.json` or containing a separator, goes to `RefStyle.from_file`), so `override_names`/`also_recognize` can reroute a file's abbreviations (BibleWorks LXX `Dan` → `DAG`, `Jdg` → `JDB`).
 - `reader.py`: `show_verses` (`notes=True` fills in `Verse.notes`), `search_verses`, and the `format_verse`/`format_note` plain-text formatters. A note line keeps the two-field contract by folding its label into the first field (`Gen 1:7 note 1<TAB>…`).
 - `resolver.py`: resolve a Bible name or path to a `.db` file via `VERSIREF_BIBLE_PATH` (or the per-user `default_data_dir`); `resolve_bible`, `list_bibles`, `bible_search_path`, `BibleNotFoundError`.
 - `cli.py`: Click CLI with the `build`, `show`, `search`, `info`, `list`, and `docs` commands. `show`/`search`/`info` accept a Bible name (resolved via `resolver.py`) or a path. `docs` prints the path to the bundled documentation (resolved with `importlib.resources.files`).
@@ -157,7 +159,7 @@ Tests in `tests/` build a small in-memory fixture Bible and exercise build/show/
 
 Input is CCAT-format `.cat` text, one verse per line: `Abbrev C:V text`.
 The abbreviation is a BibleWorks-style book name (`en-bibleworks`) by default.
-For a file that numbers the Additions to Esther as chapters A–F (as the NABRE prints them), `--chapter-letters` makes `Est A:1` … `Est F:11` parse as `ESG`.
+A file that numbers the Additions to Esther as chapters A–F (as the NABRE prints them) builds under `--versification nabre` as it stands: `Est A:1` … `Est F:11` parse as lettered chapters of `EST`.
 Recognized CCAT/BibleWorks markup — `{...}` footnote blocks (terminated, unterminated, or a stray trailing `}`), `<N1>`/`<Ra>` note anchors (also lettered, `<Na>`, or a plus sign, `<N+>`, as in the NETS), `<0430>` Strong's numbers, `(08799)` tense/voice/mood codes, SGML-like formatting tags (`<i>`, `<sup>`, `<link b="...">...</>`, plus the HTML-ish `<a id="...">` and `<br/>` real exports carry), `[italics]`, `[[literal brackets]]`, `\small caps\`, and Psalm superscriptions in double (`<<...>>`, KJV) or single (`<...>`, NRSV) angle brackets (all but the first four unwrapped, keeping the words) — is stripped by `ccat_markup.py` before storage so FTS sees clean text; `--keep-markup` stores lines verbatim.
 `--literal-brackets` (`literal_brackets=True` on `build_database`, `extract_markup`, and `strip_markup`) turns off just the bracket rules — no italics unwrapping, no `[[`/`]]` escape — for a text whose brackets are all printed ones (NA28's doubtful words, the Westminster text's qere); bracket italics are an option of the BibleWorks compiler, not a property of the format.
 Dropping a tag that sits between two words leaves a space so they stay separately searchable.
@@ -169,7 +171,7 @@ Sample `.cat` Bibles live in `reference/samples/` (gitignored): a Brenton LXX (O
 
 ## Key Dependencies
 
-- **versiref** (>=0.13.0): parsing references, versification, and verse keys. First-party (same maintainer as this package).
+- **versiref** (>=0.14.0): parsing references, versification, and verse keys. First-party (same maintainer as this package).
 - **click** (>=8.1.0): CLI framework.
 - **Python** (>=3.10).
 - **SQLite** (with FTS5): built into Python.
