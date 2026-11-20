@@ -46,6 +46,8 @@ def _report_build(stats: BuildStats, output: Path) -> None:
         click.echo(f"  stripped markup from {stats.stripped_markup} verse(s)")
     if stats.notes:
         click.echo(f"  extracted {stats.notes} translator's note(s)")
+    if stats.strongs:
+        click.echo(f"  extracted {stats.strongs} Strong's tag(s)")
     if stats.suspect_markup:
         click.echo(
             f"  warning: {stats.suspect_markup} verse(s) still contain "
@@ -249,10 +251,23 @@ def show(
     show_default=True,
     help="Reference style for labelling output and parsing --in.",
 )
+@click.option(
+    "--strongs",
+    multiple=True,
+    help="Strong's number (H430 or G976), repeat to add queries.",
+)
+@click.option(
+    "--and",
+    "match_all",
+    is_flag=True,
+    help="Require all text and Strong's queries to match.",
+)
 def search(
     database: str,
     query: str | None,
     phrase: str | None,
+    strongs: tuple[str, ...],
+    match_all: bool,
     limit: int,
     scope: str | None,
     order: str,
@@ -266,9 +281,16 @@ def search(
     syntax. To search for text as written, e.g. ``--phrase "so-called"``, give
     --phrase instead of QUERY. Output is ``reference<TAB>text``, in canonical
     verse order by default (use ``--order relevance`` for bm25 ranking).
+    Add repeatable --strongs H430 or --strongs G976 queries, alone or with
+    text. Queries are combined with OR; --and requires all of them.
     """
-    if (query is None) == (phrase is None):
-        click.echo("Error: give either QUERY or --phrase (not both)", err=True)
+    if (query is not None and phrase is not None) or (
+        query is None and phrase is None and not strongs
+    ):
+        click.echo(
+            "Error: give QUERY, --phrase, or --strongs (QUERY and --phrase cannot be combined)",
+            err=True,
+        )
         sys.exit(1)
     try:
         db_path = resolve_bible(database)
@@ -276,6 +298,8 @@ def search(
             db_path,
             query,
             phrase=phrase,
+            strongs=strongs,
+            match_all=match_all,
             limit=limit,
             scope=scope,
             order=order,

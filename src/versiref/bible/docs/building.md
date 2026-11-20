@@ -284,4 +284,18 @@ extracted.strongs           # (StrongsTag(lang='H', number=430, suffix='', word_
 ```
 
 A `StrongsTag` locates the words it tags as a span of `text.split()`, running from the previous tag (or the start of the verse) to this one; the span is empty when a tag directly follows another.
-Only the translator's notes are stored by `build` so far; cross-references and Strong's numbers are returned for callers that want them.
+Translator's notes and Strong's tags are stored by `build`; cross-references are returned for callers that want them but are not yet stored.
+
+
+## Stored Strong's tags
+
+Normal builds store the extracted verse-text tags in a `strongs` table with `verse_key`, zero-based `ordinal`, `lang`, `number`, `word_start`, and `word_end` columns.
+A tag's half-open word span indexes the final stripped verse text split on spaces, including an empty span when a tag immediately follows another tag.
+The text and spans come from the existing `extract_markup` operation; numbers inside notes are excluded.
+Tagged verse text normalizes all whitespace to spaces, so word offsets index `text.split(" ")` even when the input used a tab or a nonbreaking space.
+A homograph suffix remains available from `extract_markup`, while concordance queries group tags by language and number.
+Repeated source lines replace the previous verse's tags together with its text and notes.
+
+`BuildStats.strongs` and the `strongs_count` metadata key report the number of stored tags.
+The key is always present, including zero for a source without tags or a `keep_markup=True` build.
+The feature adds schema minor version 3.1 without increasing the core read requirement of 3.0.

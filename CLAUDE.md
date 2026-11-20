@@ -58,13 +58,13 @@ A CVE on a current dependency overrides the cooldown — upgrade immediately.
 
 ### Core Data Model
 
-Each Bible is a single SQLite database (`database.py`) with three tables:
+Each Bible is a single SQLite database (`database.py`) with five tables:
 
 1. **verses**: one row per Bible verse.
    - `verse_key`: integer primary key, the `BBCCCVVVSS` key computed under the database's versification; it doubles as the FTS5 rowid.
    - `book_id`: Paratext book ID (e.g. `JHN`).
    - `chapter`, `verse`: integers.
-   - `text`: the verse text, stored verbatim.
+   - `text`: the stripped verse text, or the original markup with `--keep-markup`.
    - `subverse`: the letters of an inserted verse (`a` in ESG 4:17a, `C12` in the NABRE's Esther C:12), else `''`; used only for the output label.
 
 2. **verses_fts**: an FTS5 external-content virtual table over `verses.text`.
@@ -72,10 +72,13 @@ Each Bible is a single SQLite database (`database.py`) with three tables:
    - Filled once after a bulk insert by `Database.rebuild_fts` — there are no sync triggers because a build is one-shot.
    - The index holds each verse with its Greek folded (`greek.fold_greek`: diacritics dropped, final sigma normalized), because the FTS5 tokenizer leaves polytonic Greek as written; so the rows are inserted explicitly rather than with FTS5's own `'rebuild'`, which would index the text as stored. A build records this as the `search_folding` metadata key (`greek`), and `search_verses` folds its query only when the key is present, so a database indexed as written is still searched as written.
 
-3. **metadata**: key-value pairs (`format`, `title`, `versification`, `source`, `verse_count`, `notes_count`, `search_folding`, `built_at`, `schema_version`).
+3. **metadata**: key-value pairs (`format`, `title`, `versification`, `source`, `verse_count`, `notes_count`, `strongs_count`, `search_folding`, `built_at`, `schema_version`).
 
-A fourth table, **notes** (`verse_key`, `label`, `text`), holds the translator's notes extracted from the footnote blocks, in source order within a verse.
-It is not full-text indexed.
+4. **notes** (`verse_key`, `label`, `text`): translator's notes extracted from footnote blocks, in source order within a verse.
+   Notes are not full-text indexed.
+
+5. **strongs** (`verse_key`, `ordinal`, `lang`, `number`, `word_start`, `word_end`): verse-text tags in occurrence order with half-open word spans into the final space-normalized text.
+   Verse and `(lang, number)` indexes support concordance search.
 
 ### Verse Encoding
 
@@ -134,9 +137,10 @@ A built Bible carries a `format` metadata marker (`PRODUCT_NAME = "versiref-bibl
 Every read path calls it: `show_verses`, `search_verses` (`reader.py`), and `info` (`cli.py`).
 Databases built before the marker existed are unmarked and rejected with a "rebuild the Bible" message — mirroring `versiref-search`'s identical check (its commit `6c58477`).
 
-The version a build *writes* (`SCHEMA_VERSION`, 3.0) is separate from the one the core reads *require*, so an additive minor bump never locks an older database out of `show`/`search`/`info`.
+The version a build *writes* (`SCHEMA_VERSION`, 3.1) is separate from the one the core reads *require*, so an additive minor bump never locks an older database out of `show`/`search`/`info`.
 Each feature a minor bump adds is listed in `FEATURES` and gates only its own reads through `Database.require_feature`, which fails on an older database with a "rebuild the Bible with versiref-bible >= X" message.
-`FEATURES` is empty at the start of a major version: 3.0 folded 2.1's notes and `subverse` into the baseline, since a major bump rebuilds everything anyway.
+`FEATURES` includes `strongs` (schema 3.1); its first package release is left unset until the maintainer chooses the release number.
+The core read requirement remains 3.0, which folded 2.1's notes and `subverse` into the baseline.
 A column a later minor bump adds should be read tolerantly (selecting a default for a missing column), so the core reads still accept the older minor.
 Every feature build also writes a `<feature>_count` metadata key, always, zero included: present means the database has the feature, `0` that this Bible has no such data, absent that it predates the feature.
 
@@ -163,7 +167,7 @@ A file that numbers the Additions to Esther as chapters A–F (as the NABRE prin
 Recognized CCAT/BibleWorks markup — `{...}` footnote blocks (terminated, unterminated, or a stray trailing `}`), `<N1>`/`<Ra>` note anchors (also lettered, `<Na>`, or a plus sign, `<N+>`, as in the NETS), `<0430>` Strong's numbers, `(08799)` tense/voice/mood codes, SGML-like formatting tags (`<i>`, `<sup>`, `<link b="...">...</>`, plus the HTML-ish `<a id="...">` and `<br/>` real exports carry), `[italics]`, `[[literal brackets]]`, `\small caps\`, and Psalm superscriptions in double (`<<...>>`, KJV) or single (`<...>`, NRSV) angle brackets (all but the first four unwrapped, keeping the words) — is stripped by `ccat_markup.py` before storage so FTS sees clean text; `--keep-markup` stores lines verbatim.
 `--literal-brackets` (`literal_brackets=True` on `build_database`, `extract_markup`, and `strip_markup`) turns off just the bracket rules — no italics unwrapping, no `[[`/`]]` escape — for a text whose brackets are all printed ones (NA28's doubtful words, the Westminster text's qere); bracket italics are an option of the BibleWorks compiler, not a property of the format.
 Dropping a tag that sits between two words leaves a space so they stay separately searchable.
-The translator's notes of the footnote blocks are stored in the `notes` table; the cross-references and Strong's numbers are extracted by `extract_markup` but not yet stored — putting them into structured tables (cross-references as verse-key ranges, Strong's numbers per verse; issues #3 and #4) is future work, each an additive schema-minor bump.
+The translator's notes of the footnote blocks are stored in the `notes` table; Strong's numbers are extracted and stored with their final-text word offsets, enabling concordance search; cross-references are extracted but not yet stored (issue #3).
 The sample CEI 2008 file is `cp1252`, not UTF-8, so `build` accepts `--encoding`.
 The Rahlfs LXX is Beta Code Greek; `--encoding beta-code` converts it to Unicode.
 
@@ -229,3 +233,12 @@ When writing or editing Markdown (docs, README, this file):
 - `uv.lock`: lock file for reproducible dependency resolution.
 - `SECURITY.md`: disclosure process and supply-chain defenses.
 - `CHANGELOG.md`: notable changes per version (Keep a Changelog format).
+
+
+### Strong's concordance
+
+Schema 3.1 adds the `strongs` table and verse/number indexes.
+The builder stores the existing extraction results, removes an earlier duplicate verse's tags, and always records `strongs_count`.
+`Database.search_strongs` combines text and tag key sets with UNION or INTERSECT before applying scope, limit, count, and ordering.
+`search_verses` accepts `strongs` and `match_all`; the CLI exposes repeatable `--strongs` and `--and`.
+Core schema-3.0 reads are unchanged; only concordance searches require the feature.

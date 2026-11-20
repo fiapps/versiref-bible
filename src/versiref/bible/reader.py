@@ -1,6 +1,8 @@
 """Query a Bible database: show verses by reference and full-text search."""
 
+import re
 import sqlite3
+from collections.abc import Sequence
 from dataclasses import replace
 from pathlib import Path
 
@@ -120,6 +122,8 @@ def search_verses(
     query: str | None = None,
     *,
     phrase: str | None = None,
+    strongs: Sequence[str] = (),
+    match_all: bool = False,
     limit: int = 20,
     scope: str | None = None,
     order: str = "canonical",
@@ -133,8 +137,10 @@ def search_verses(
             ``AND``, ``OR``, and ``NOT`` are query syntax); use ``phrase`` for
             text to be matched as written.
         phrase: Literal text to search for: matches its words in sequence and
-            reads nothing as query syntax. Exactly one of ``query`` and
-            ``phrase`` must be given.
+            reads nothing as query syntax. Cannot be combined with ``query``.
+        strongs: Strong's numbers such as H430 or G976, case-insensitive.
+            Each number contributes a query set, combined with the text set.
+        match_all: Intersect all query sets instead of taking their union.
         limit: Maximum number of verses to return.
         scope: Optional Bible reference restricting the search (parsed in the
             database's versification).
@@ -147,17 +153,33 @@ def search_verses(
         is the match count before ``limit`` was applied.
 
     Raises:
-        ValueError: If the scope reference or the FTS query is invalid, or if
-            not exactly one of ``query`` and ``phrase`` is given.
+        ValueError: If a number, scope reference or FTS query is invalid,
+            if both text forms are supplied, or if no query is supplied.
+        IncompatibleDatabaseError: If a concordance query uses an older
+            database without Strong's numbers.
 
     """
-    if (query is None) == (phrase is None):
+    if query is not None and phrase is not None:
         raise ValueError("Exactly one of query and phrase must be provided")
-    match = query if query is not None else _fts_phrase(phrase or "")
+    if query is None and phrase is None and not strongs:
+        raise ValueError(
+            "Exactly one of query and phrase must be provided, or use Strong's numbers"
+        )
+    numbers = []
+    for value in strongs:
+        number = re.fullmatch(r"([HG])0*([0-9]{1,19})", value, re.IGNORECASE)
+        if number is None or int(number[2]) > 2**63 - 1:
+            raise ValueError(f"Invalid Strong's number {value!r}: use H430 or G976")
+        numbers.append((number[1].upper(), int(number[2])))
+    match = (
+        query
+        if query is not None
+        else (_fts_phrase(phrase) if phrase is not None else None)
+    )
     with Database(db_path) as db:
         db.validate_schema()
         db_vers = _db_versification(db)
-        if db.get_metadata("search_folding") == SEARCH_FOLDING:
+        if match is not None and db.get_metadata("search_folding") == SEARCH_FOLDING:
             # The index holds Greek stripped of its diacritics; a database
             # built before that was indexed as written, and is searched so.
             match = fold_greek(match)
@@ -169,8 +191,19 @@ def search_verses(
                 raise ValueError(f"Could not parse scope reference: {scope!r}")
             ranges = list(scope_ref.range_keys())
         try:
-            results = db.search(match, limit, ranges, order)
-            total = db.count_matches(match, ranges)
+            if numbers:
+                results, total = db.search_strongs(
+                    numbers,
+                    query=match,
+                    match_all=match_all,
+                    limit=limit,
+                    ranges=ranges,
+                    order=order,
+                )
+            else:
+                assert match is not None
+                results = db.search(match, limit, ranges, order)
+                total = db.count_matches(match, ranges)
         except sqlite3.OperationalError as exc:
             raise ValueError(
                 f"Invalid search query {match!r} ({exc}); to search for the "

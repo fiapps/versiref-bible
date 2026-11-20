@@ -6,7 +6,7 @@ from pathlib import Path
 from versiref import RefParser, RefStyle, Versification
 
 from .beta_code import beta_to_unicode, is_beta_code
-from .ccat_markup import extract_markup, has_markup_residue
+from .ccat_markup import StrongsTag, extract_markup, has_markup_residue
 from .database import PRODUCT_NAME, SCHEMA_VERSION, SEARCH_FOLDING, Database
 from .models import BuildStats, Note, Verse
 
@@ -128,6 +128,7 @@ def build_database(
     stats = BuildStats()
     verses: dict[int, Verse] = {}
     notes: dict[int, tuple[Note, ...]] = {}
+    strongs: dict[int, tuple[StrongsTag, ...]] = {}
 
     with input_path.open(encoding=encoding) as handle:
         for raw in handle:
@@ -180,6 +181,7 @@ def build_database(
             # Keyed like the verse, so a duplicate line replaces the earlier
             # line's notes along with its text.
             notes.pop(key, None)
+            strongs.pop(key, None)
             if not keep_markup:
                 extracted = extract_markup(text, literal_brackets=literal_brackets)
                 if extracted.text != text:
@@ -187,6 +189,9 @@ def build_database(
                     text = extracted.text
                 if has_markup_residue(text):
                     stats.suspect_markup += 1
+                if extracted.strongs:
+                    text = " ".join(text.split())
+                    strongs[key] = extracted.strongs
                 if extracted.notes:
                     # A note on a phrase with an anchor at each end is given
                     # once per anchor (NETS); store it once.
@@ -203,6 +208,7 @@ def build_database(
 
     stats.stored = len(verses)
     stats.notes = sum(len(verse_notes) for verse_notes in notes.values())
+    stats.strongs = sum(len(tags) for tags in strongs.values())
 
     output_path.unlink(missing_ok=True)
     with Database(output_path) as db:
@@ -211,6 +217,7 @@ def build_database(
         db.insert_notes(
             (key, note) for key, verse_notes in notes.items() for note in verse_notes
         )
+        db.insert_strongs((key, tag) for key, tags in strongs.items() for tag in tags)
         db.rebuild_fts()
         db.set_metadata("format", PRODUCT_NAME)
         db.set_metadata("schema_version", SCHEMA_VERSION)
@@ -223,6 +230,7 @@ def build_database(
         # Always written, zero included: the key's presence says the database
         # has the feature, its value whether this Bible has any such data.
         db.set_metadata("notes_count", str(stats.notes))
+        db.set_metadata("strongs_count", str(stats.strongs))
         db.set_metadata(
             "built_at", datetime.datetime.now().isoformat(timespec="seconds")
         )

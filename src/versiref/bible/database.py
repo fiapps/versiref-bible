@@ -5,6 +5,7 @@ from collections.abc import Iterable, Sequence
 from pathlib import Path
 from typing import Any
 
+from .ccat_markup import StrongsTag
 from .greek import fold_greek
 from .models import Note, Verse
 
@@ -28,13 +29,16 @@ PRODUCT_NAME = "versiref-bible"
 #      lettered chapters joined EST, so every later book moved down one) and
 #      reordered Greek Esther 1:1 in lxx and cei. A 2.x database's keys no
 #      longer match the references parsed against them, so it must be rebuilt.
-SCHEMA_VERSION = "3.0"
+# 3.1: Strong's tags and final-text word spans, with concordance search.
+SCHEMA_VERSION = "3.1"
 REQUIRED_SCHEMA_VERSION = "3.0"
 
 # Feature -> (description, schema version that introduced it, first package
-# version to build it). Empty at a major version's start: everything 3.0 has is
+# version to build it, or None until its first release). Everything 3.0 has is
 # part of the baseline that REQUIRED_SCHEMA_VERSION checks.
-FEATURES: dict[str, tuple[str, str, str]] = {}
+FEATURES: dict[str, tuple[str, str, str | None]] = {
+    "strongs": ("Strong's numbers", "3.1", None),
+}
 
 
 # Value of the "search_folding" metadata key: the full-text index holds Greek
@@ -101,6 +105,18 @@ CREATE TABLE IF NOT EXISTS notes (
 );
 
 CREATE INDEX IF NOT EXISTS idx_notes_verse ON notes(verse_key);
+
+-- Strong's tags, with word offsets into the final stripped verse text.
+CREATE TABLE IF NOT EXISTS strongs (
+    verse_key  INTEGER NOT NULL,
+    ordinal    INTEGER NOT NULL,
+    lang       TEXT NOT NULL,
+    number     INTEGER NOT NULL,
+    word_start INTEGER NOT NULL,
+    word_end   INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_strongs_verse ON strongs(verse_key);
+CREATE INDEX IF NOT EXISTS idx_strongs_number ON strongs(lang, number);
 """
 
 
@@ -261,10 +277,15 @@ class Database:
         description, schema, package = FEATURES[feature]
         version, parsed = self._schema_version()
         if parsed < _parse_schema_version(schema):
+            rebuild_with = (
+                f"versiref-bible >= {package}"
+                if package is not None
+                else f"a versiref-bible version supporting {description}"
+            )
             raise IncompatibleDatabaseError(
                 f"{self.db_path}: this database was built without {description} "
                 f"(schema version {version}; they need {schema}); rebuild the "
-                f"Bible with versiref-bible >= {package}"
+                f"Bible with {rebuild_with}"
             )
 
     @staticmethod
@@ -298,6 +319,25 @@ class Database:
         conn.executemany(
             "INSERT INTO notes (verse_key, label, text) VALUES (?, ?, ?)",
             [(key, note.label, note.text) for key, note in notes],
+        )
+        conn.commit()
+
+    def insert_strongs(self, tags: Iterable[tuple[int, StrongsTag]]) -> None:
+        """Bulk-insert tags with their source order and final-text word spans."""
+        conn = self._require_conn()
+        ordinals: dict[int, int] = {}
+        rows = []
+        for key, tag in tags:
+            ordinal = ordinals.get(key, 0)
+            rows.append(
+                (key, ordinal, tag.lang, tag.number, tag.word_start, tag.word_end)
+            )
+            ordinals[key] = ordinal + 1
+        conn.executemany(
+            "INSERT INTO strongs"
+            " (verse_key, ordinal, lang, number, word_start, word_end)"
+            " VALUES (?, ?, ?, ?, ?, ?)",
+            rows,
         )
         conn.commit()
 
@@ -421,6 +461,80 @@ class Database:
             params.extend(range_params)
         cursor = conn.execute("\n".join(sql), params)
         return int(cursor.fetchone()["n"])
+
+    def search_strongs(
+        self,
+        strongs: Sequence[tuple[str, int]],
+        *,
+        query: str | None = None,
+        match_all: bool = False,
+        limit: int = 20,
+        ranges: Sequence[tuple[int, int]] | None = None,
+        order: str = "canonical",
+    ) -> tuple[list[Verse], int]:
+        """Combine Strong's concordance queries and optional full-text search.
+
+        Each number and the text query contribute a set of verse keys.
+        Union is the default; ``match_all`` intersects all query sets.
+        Text matches rank before number-only matches in relevance order.
+        The count is computed before limiting the returned verses.
+
+        Raises:
+            ValueError: If no number is given or the order is unknown.
+            IncompatibleDatabaseError: If the database predates the feature.
+
+        """
+        if not strongs:
+            raise ValueError("At least one Strong's number must be provided")
+        if order not in ("canonical", "relevance"):
+            raise ValueError(
+                f"Invalid order {order!r}: use 'canonical' or 'relevance'."
+            )
+        self.require_feature("strongs")
+        conn = self._require_conn()
+        clauses = []
+        queries = []
+        params: list[Any] = []
+        if query is not None:
+            clauses.append(
+                "text_matches AS (SELECT rowid AS verse_key, rank"
+                " FROM verses_fts WHERE text MATCH ?)"
+            )
+            params.append(query)
+            queries.append("SELECT verse_key FROM text_matches")
+        for lang, number in dict.fromkeys(strongs):
+            queries.append(
+                "SELECT DISTINCT verse_key FROM strongs WHERE lang = ? AND number = ?"
+            )
+            params.extend((lang, number))
+        operator = " INTERSECT " if match_all else " UNION "
+        clauses.append("matches AS (" + operator.join(queries) + ")")
+        prefix = "WITH " + ", ".join(clauses)
+        source = " FROM verses v JOIN matches m ON v.verse_key = m.verse_key"
+        where = ""
+        if ranges is not None:
+            clause, range_params = _range_clause(ranges)
+            where = " WHERE " + clause.replace("verse_key", "v.verse_key")
+            params.extend(range_params)
+        total = int(
+            conn.execute(
+                prefix + " SELECT COUNT(*)" + source + where, params
+            ).fetchone()[0]
+        )
+        if order == "relevance" and query is not None:
+            source += " LEFT JOIN text_matches f ON v.verse_key = f.verse_key"
+            ordering = "f.rank IS NULL, f.rank, v.verse_key"
+        else:
+            ordering = "v.verse_key"
+        cursor = conn.execute(
+            prefix
+            + f" SELECT {self._verse_columns()}"
+            + source
+            + where
+            + f" ORDER BY {ordering} LIMIT ?",
+            [*params, limit],
+        )
+        return [_row_to_verse(row) for row in cursor.fetchall()], total
 
 
 def _row_to_verse(row: sqlite3.Row) -> Verse:
