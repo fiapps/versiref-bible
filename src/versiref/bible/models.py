@@ -65,6 +65,7 @@ class BuildStats:
             markup-like characters after stripping (unrecognized markup,
             kept verbatim).
         notes: Number of translator's notes extracted and stored.
+        strongs: Number of Strong's tags extracted and stored.
 
     """
 
@@ -76,3 +77,4 @@ class BuildStats:
     stripped_markup: int = 0
     suspect_markup: int = 0
     notes: int = 0
+    strongs: int = 0

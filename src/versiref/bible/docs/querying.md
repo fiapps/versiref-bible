@@ -331,3 +331,32 @@ for verse in verses:
     for note in verse.notes:
         print(format_note(verse, note, style, db_vers))
 ```
+
+
+## Strong's concordance
+
+A build stores the Strong's tags from the verse text as a separate concordance, so searching a lemma does not depend on its translated words.
+Use `H` for a Hebrew number or `G` for a Greek number, case-insensitively:
+
+```sh
+versiref-bible search kjv --strongs H430
+versiref-bible search kjv "light" --strongs H216 --strongs H3915
+versiref-bible search kjv --phrase "the light" --strongs H216 --and
+```
+
+Every number and the optional text query contribute a set of matching verses.
+By default the sets are combined with **OR**; `--and` requires a verse to match every query.
+A repeated tag in a verse or a repeated query never duplicates an output verse.
+At least one text or Strong's query is required, and `QUERY` and `--phrase` remain mutually exclusive.
+
+`--in`, `--limit`, and the total-match count apply after combining the sets.
+Canonical verse order is the default.
+With `--order relevance`, text matches come first in FTS5 rank order; verses found only by Strong's number follow in canonical order.
+A concordance-only query uses canonical order even when relevance order is selected.
+
+In Python, use `search_verses(path, strongs=["H430"])` or combine `query`/`phrase` with `strongs` and `match_all=True`.
+The returned tuple retains its usual `(verses, total_matches, versification)` shape.
+
+Strong's search requires schema 3.1 and reports a clear rebuild message for an older database.
+Plain `show`, text searches, and `info` continue to accept schema 3.0.
+Builds using `--keep-markup` keep their source text intact and extract no tags, matching their handling of translator's notes.

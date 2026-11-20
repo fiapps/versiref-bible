@@ -168,7 +168,8 @@ def test_build_writes_current_schema_version(bible_db: Path) -> None:
 def test_require_feature_gates_a_later_minor(
     bible_db: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # No feature postdates 3.0 yet; a hypothetical 3.1 one exercises the gate.
+    # Core reads accept 3.0; individual features require their introduced minor.
+    _set_meta(bible_db, "schema_version", "3.0")
     monkeypatch.setitem(FEATURES, "widgets", ("widgets", "3.1", "9.9.9"))
     with Database(bible_db) as db:
         db.validate_schema()  # the core reads still accept 3.0
